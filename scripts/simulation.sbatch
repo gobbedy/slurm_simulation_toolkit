@@ -115,6 +115,6 @@ do
 done
 wait
 
-if [[ ${cluster} != "cedar" ]]; then
-    ssh $login_node scp -o "StrictHostKeyChecking=no" -r $output_dir gobbedy@cedar.computecanada.ca:/home/gobbedy/projects/def-yymao/gobbedy/regress/mixup_paper/${cluster}
-fi
+#if [[ ${cluster} != "cedar" ]]; then
+#    ssh $login_node scp -o "StrictHostKeyChecking=no" -r $output_dir gobbedy@cedar.computecanada.ca:/home/gobbedy/projects/def-yymao/gobbedy/regress/mixup_paper/${cluster}
+#fi

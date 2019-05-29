@@ -85,7 +85,9 @@ while [[ "$1" == -* ]]; do
 done
 
 #regression_name=$1
-regression_dir=regressions
+run_dir=`dirname $me_dir`
+regression_dir=$run_dir/regressions
+export PATH=$me_dir:$PATH
 
 checkpoint_location=/home/gobbedy/projects/def-yymao/gobbedy/regress/mixup_paper/directional_Apr26_140114/checkpoint.torch
 
@@ -194,16 +196,10 @@ if (( $num_simulations % $num_proc_per_gpu )) ; then
   die "$num_simulations not divisible by $num_proc_per_gpu"
 fi
 
-echo "${input_command}" > ${regression_command_file}
-
 num_jobs=$(echo $((num_simulations / num_proc_per_gpu)))
 
 node_prefix=$(hostname | cut -c1-3)
-if [[ $node_prefix == "hel" ]]; then
-   job_script_executable="directional_adversarial_helios.sh"
-else
-   job_script_executable="directional_adversarial.sh"
-fi
+job_script_executable="simulation.sh"
 
 if [[ $node_prefix == "ced" ]]; then
     account="rrg-yymao"
@@ -266,6 +262,8 @@ if [[ ! -d ${regression_dir} ]]; then
   mkdir ${regression_dir}
 fi
 
+echo "${input_command}" > ${regression_command_file}
+
 for (( i=0; i<$num_jobs; i++ ));
 do
 
@@ -310,8 +308,6 @@ do
    done
 
    echo ${job_number} >> ${regression_job_numbers_file}
-   # sleep 1s to make sure output directories have different name
-   # sleep 1
 done
 
 echo ""
