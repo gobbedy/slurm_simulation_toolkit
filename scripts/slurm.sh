@@ -183,7 +183,7 @@ elif [[ -z ${num_nodes} ]]; then
 fi
 
 if [[ -z ${prolog_file} ]]; then
-  prolog_file=${job_name}.log
+  prolog_file=${job_name}.prolog
 fi
 
 if [[ "${slurm_command}" == "salloc" ]]; then
