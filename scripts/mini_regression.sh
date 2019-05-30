@@ -142,13 +142,13 @@ time="0-4:00:00"
 batch_size=128
 epochs=200
 job_basename='dat' # job_name will be job_basename unless '--max_jobs_in_parallel' argument is provided
+max_jobs_in_parallel=''
 
 ########################################################################################################################
 ###################################### ARGUMENT PROCESSING AND CHECKING ################################################
 ############################### YOU MUST CHANGE THIS! SEE THE ALLOTTED PLACE FOR CHANGES ###############################
 ########################################################################################################################
 blocking_jobs=()
-max_jobs_in_parallel=''
 while [[ "$1" == -* ]]; do
   case "$1" in
     -h|--help)
