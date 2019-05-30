@@ -1,8 +1,93 @@
 #!/bin/bash
-set -o pipefail
 me=$(basename ${0%%@@*})
 full_me=${0%%@@*}
-#set -e
+
+# if one of the commands in a pipe fails, the entire command returns non-zero code otherwise only the return code
+# of last command would be returned regardless if some earlier commands in the pipe failed
+set -o pipefail
+
+function showHelp {
+
+echo "NAME
+  $me -
+     1) Print regression results, for individual simulations and/or for entire regression
+           a) Optionally print average test error over last 10 epochs for each simulation
+           b) Print mean of average test error over all simulations
+           c) Print standard deviation of average test errors.
+     2) Optionally plots training loss and test error curves for each simulations
+           a) Generates latex using templating
+           b) Converts latex to PDF: plots are optionally all in one pdf or one PDF per simulation
+           c) Optionally attaches PDF(s) to summary e-mail
+     3) Optionally plots a histogram of the average test errors with Gaussian curve overlay.
+            --TODO: clean up support of different overlay curves for different datasets/models.
+           a) Generates latex histogram with Gaussian overlay. Overlay is a golden reference provided by user.
+           b) Converts latex to PDF
+           c) Optionally attaches PDF to summary e-mail
+     4) E-mails results to user
+SYNOPSIS
+  $me [-l LOGFILE | -f MANIFEST] [OPTIONS]
+OPTIONS
+  -h, --help
+                          Show this description
+
+  -c
+                          Generate train loss/test error curves with one pdf per logfile. Incompatible with --one_pdf.
+
+  --check_epochs CHECK_EPOCHS
+                          Check that each logfile ran for CHECK_EPOCHS epochs. Error out a different total number
+                          of epochs is seen for any given logfile.
+
+  --cluster CLUSTER
+                          Fetch logfiles from CLUSTER cluster. If this option is used, all logfiles (whether supplied
+                          via -l or -f) are assumed to reside on CLUSTER.
+
+  -e EXCLUDE_N
+                          Skip the logfile that would other be processed in the EXCLUDE_N'th position. For example if
+                          EXCLUDE_N is 5, the logfile that would otherwise have been processed 5th is excluded.
+
+                          If logfiles are provided via both -l and -f options, -f files are processed first.
+                          Logfiles are otherwise processed in order of where they appear on the command line.
+
+  --epochs EPOCHS
+                          Process the first EPOCHS epochs contained in each logfile. This option effectively treats
+                          each logfile as if it contained only EPOCHS epochs.
+
+                          If this option is not provided, all epochs will be processed (even if the varies by logfile).
+
+  -f MANIFEST
+                          MANIFEST is a file containing a list of logfiles to process. Only one manifest file may be
+                          provided.
+
+  --histogram
+                          Enables histogram generation. See item 3 at the top of this help section.
+
+  -l LOGFILE [-l LOGFILE2 ... ]
+                          LOGFILE is a logfile to process. Multiple -l options can be provided.
+
+  -m
+                          Send e-mail with summary results and attached plots. E-mail is sent to e-mail address
+                          stored in EMAIL environment variable.
+                          Default: e-mail is not sent.
+
+  -n REGRESSION_NAME
+                          REGRESSION_NAME is a unique name to reference the set of logfiles processed. It is used
+                          in the names of generated results directories and files.
+
+  --no_individual
+                          Disable printing of test error / train loss for individual simulations.
+                          Default: individual printing enabled.
+
+  --one_graph
+                          NOT IMPLEMENTED YET. Will print all train losses on the same plot, and all test errors on
+                          another plot.
+
+  --one_pdf
+                          Generate train loss/test error curves with all graphs in the same PDF. Incompatible with -c.
+
+  --train_losses
+                          Print training losses. Default: training loss printing disabled.
+"
+}
 
 function die {
   err_msg="$@"
@@ -31,59 +116,47 @@ histogram=''
 check_epochs=''
 while [[ "$1" == -* ]]; do
   case "$1" in
-    -l)
-      logfiles+=($2)
-      shift 2
-    ;;
-    -e)
-      exclude_list+=($2)
-      shift 2
-    ;;
-    --cluster)
-      cluster=$2
-      shift 2
-    ;;
-    -f)
-      manifest_file=$2
-      shift 2
-    ;;
-    --no_individual)
-      print_individual_results=no
-      shift 1
-    ;;
-    --histogram)
-      histogram=yes
-      shift 1
-    ;;
-    --train_losses)
-      print_train_losses=yes
-      shift 1
+    -h|--help)
+      showHelp
+      exit 0
     ;;
     -c)
+      split_pdf=1
       generate_curves=1
       shift 1
-    ;;
-    -m)
-      email_results=1
-      shift 1
-    ;;
-    --one_pdf)
-      one_pdf=1
-      generate_curves=1
-      shift 1
-    ;;
-    --epochs)
-      # only process first "epochs" epochs
-      epochs=$2
-      shift 2
     ;;
     --check_epochs)
       # only process first "epochs" epochs
       check_epochs=$2
       shift 2
     ;;
-    --one_graph)
-      one_graph=1
+    --cluster)
+      cluster=$2
+      shift 2
+    ;;
+    -e)
+      exclude_list+=($2)
+      shift 2
+    ;;
+    --epochs)
+      # only process first "epochs" epochs
+      epochs=$2
+      shift 2
+    ;;
+    -f)
+      manifest_file=$2
+      shift 2
+    ;;
+    --histogram)
+      histogram=yes
+      shift 1
+    ;;
+    -l)
+      logfiles+=($2)
+      shift 2
+    ;;
+    -m)
+      email_results=1
       shift 1
     ;;
     -n)
@@ -94,6 +167,23 @@ while [[ "$1" == -* ]]; do
           exit 1
       fi
     ;;
+    --no_individual)
+      print_individual_results=no
+      shift 1
+    ;;
+    --one_graph)
+      one_graph=1
+      shift 1
+    ;;
+    --one_pdf)
+      one_pdf=1
+      generate_curves=1
+      shift 1
+    ;;
+    --train_losses)
+      print_train_losses=yes
+      shift 1
+    ;;
 	# START CHANGES HERE
 	# END CHANGES HERE
     -*)
@@ -102,6 +192,10 @@ while [[ "$1" == -* ]]; do
     ;;
   esac
 done
+
+if [[ -n ${split_pdf} && -n ${one_pdf} ]]; then
+    die "-c and --one_pdf are incompatible."
+fi
 
 # which lines to remove
 sed_exclude_option=`printf '%sd;' "${exclude_list[@]}"`
@@ -198,8 +292,8 @@ num_logs="${#logfiles[@]}"
 if [[ ${num_logs} -gt 1 ]]; then
   if [[ -z ${regression_name} ]]; then
     if [[ -n ${manifest_file} ]]; then
-        log_basename=`basename ${manifest_file}`
-        regression_name=${log_basename::-9}
+        manifest_dirname=$(dirname ${manifest_file})
+        regression_name=$(basename ${manifest_dirname})
     else
         echo "ERROR: regression name not provided (use -n NAME)"
         exit 1
@@ -216,8 +310,8 @@ fi
 mailx_executable="/usr/bin/mailx"
 results_dir=$PWD/results
 output_dir=${results_dir}/${regression_name}
-processed_results_log=${output_dir}/${regression_name}_processed.txt
-global_tex_output_dir=${output_dir}/${regression_name}_tex
+processed_results_log=${output_dir}/gen_summary.txt
+global_tex_output_dir=${output_dir}/gentex
 
 ################## PROCESS LOGFILES ####################
 

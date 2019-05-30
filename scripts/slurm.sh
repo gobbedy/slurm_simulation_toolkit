@@ -21,8 +21,6 @@ OPTIONS
                           Show this description
   -a, --account
                           Which account to use (def-yymao or rrg-yymao)
-  --mail EMAIL
-                          Send user e-mail when job ends. Sends e-mail to EMAIL
   -c, --num_cpus
                           Number of CPUs to be allocated to the job. Default 1.
   --cmd, --command
@@ -35,10 +33,12 @@ OPTIONS
                           Number of GPUs to be allocated to the job. Default 0.
   -j, --job_name
                           Name of job to be displayed in SLURM queue.
-  -m, --mem
-                          Amount of memory (eg 500m, 7g). Default 256m.
-  -n, --nodes
-                          Number of compute nodes.
+  -m, --mem MEM
+                          MEM is the amount of memory (eg 500m, 7g) to request. Default 256m.
+  --mail EMAIL
+                          Send user e-mail when job ends. Sends e-mail to EMAIL
+  -n, --nodes NODES
+                          NODES is the number of compute nodes to request.
 
   --num_proc_per_gpu PROCS
                           PROCS is the number of processes, aka simulations, to run on the requested compute resource.
@@ -123,25 +123,8 @@ while [[ "$1" == -* ]]; do
       account=$2
       shift 2
     ;;
-    --mail)
-      mail=yes
-      EMAIL=$2
-      shift 2
-      if [[ ${EMAIL} == -* ]]; then
-          echo "ERROR: invalid email: ${EMAIL}"
-          exit 1
-      fi
-      if [[ ${EMAIL} != *@* ]]; then
-          echo "ERROR: invalid email: ${EMAIL}"
-          exit 1
-      fi
-    ;;
     -c|--num_cpus)
       num_cpus=$2
-      shift 2
-    ;;
-    --num_proc_per_gpu)
-      num_proc_per_gpu=$2
       shift 2
     ;;
     --cmd|--command)
@@ -164,8 +147,25 @@ while [[ "$1" == -* ]]; do
       mem=$2
       shift 2
     ;;
+    --mail)
+      mail=yes
+      EMAIL=$2
+      shift 2
+      if [[ ${EMAIL} == -* ]]; then
+          echo "ERROR: invalid email: ${EMAIL}"
+          exit 1
+      fi
+      if [[ ${EMAIL} != *@* ]]; then
+          echo "ERROR: invalid email: ${EMAIL}"
+          exit 1
+      fi
+    ;;
     -n|--nodes)
       num_nodes=$2
+      shift 2
+    ;;
+    --num_proc_per_gpu)
+      num_proc_per_gpu=$2
       shift 2
     ;;
     --prolog)

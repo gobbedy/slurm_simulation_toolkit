@@ -1,8 +1,25 @@
 #!/bin/bash
-set -o pipefail
 me=$(basename ${0%%@@*})
 full_me=${0%%@@*}
 me_dir=$(dirname $(readlink -f ${0%%@@*}))
+
+# if one of the commands in a pipe fails, the entire command returns non-zero code otherwise only the return code
+# of last command would be returned regardless if some earlier commands in the pipe failed
+set -o pipefail
+
+function showHelp {
+
+echo "NAME
+  $me -
+     1) Report regression status (running, completed, failed)
+     2) Print one line summary of results
+SYNOPSIS
+  $me [OPTIONS]
+OPTIONS
+  -h, --help
+                          Show this description
+"
+}
 
 function die {
   err_msg="$@"
@@ -15,6 +32,21 @@ function error {
   errors=$(( errors + 1 ))
   printf "$me: ERROR: %b\n" "${err_msg}" >&2
 }
+
+while [[ "$1" == -* ]]; do
+  case "$1" in
+    -h|--help)
+      showHelp
+      exit 0
+    ;;
+	# START CHANGES HERE
+	# END CHANGES HERE
+    -*)
+      echo "Invalid option $1"
+      exit 1
+    ;;
+  esac
+done
 
 check_epochs=''
 errors=0
