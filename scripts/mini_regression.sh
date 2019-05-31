@@ -22,8 +22,10 @@ echo "NAME
   $me -
      1) Launches many jobs at in parallel
      2) Wraps simulation.sh script
+
 SYNOPSIS
   $me [OPTIONS]
+
 OPTIONS
   -h, --help
                           Show this description
@@ -142,13 +144,13 @@ time="0-4:00:00"
 batch_size=128
 epochs=200
 job_basename='dat' # job_name will be job_basename unless '--max_jobs_in_parallel' argument is provided
+max_jobs_in_parallel=''
 
 ########################################################################################################################
 ###################################### ARGUMENT PROCESSING AND CHECKING ################################################
 ############################### YOU MUST CHANGE THIS! SEE THE ALLOTTED PLACE FOR CHANGES ###############################
 ########################################################################################################################
 blocking_jobs=()
-max_jobs_in_parallel=''
 while [[ "$1" == -* ]]; do
   case "$1" in
     -h|--help)
@@ -237,11 +239,6 @@ regression_command_file=${regression_summary_dir}/regression_command.txt
 regression_logname_file=${regression_summary_dir}/log_manifest.txt
 regression_job_numbers_file=${regression_summary_dir}/job_manifest.txt
 
-# Create a shorthand reference, eg beluga@4k35d00r to be used by regression_status.sh script
-# Note: may be used in process_result.sh in the future
-hash=$(echo -n `readlink -f $regression_logname_file` | sha1sum | grep -oP '^\w{8}')
-reference="${local_cluster}@${hash}"
-
 # create regression dir if doesn't exist
 mkdir -p ${regression_summary_dir}
 
@@ -281,16 +278,16 @@ do
 
    ${job_script_executable} ${job_script_options} ${job_unique_options}  |tee tmp_output.log
 
-   prolog_file=$(grep -oP '(?<=--output=)[^ ]+' tmp_output.log)
+   slurm_logfile=$(grep -oP '(?<=--output=)[^ ]+' tmp_output.log)
    job_number=$(grep "Submitted" tmp_output.log | grep -oP '\d+$')
    rm tmp_output.log
 
    for (( j=0; j<$num_proc_per_gpu; j++ )); do
-      prolog_dirname=`dirname $prolog_file`
-      prolog_basename=`basename $prolog_file`
+      slurm_logdirname=`dirname $slurm_logfile`
+      slurm_logbasename=`basename $slurm_logfile`
       gpu_number=${j}
-      log_basename="${prolog_basename%.*}_proc_${gpu_number}.log"
-      logfile=$prolog_dirname/${log_basename}
+      log_basename="${slurm_logbasename%.*}_proc_${gpu_number}.log"
+      logfile=$slurm_logdirname/${log_basename}
       echo ${logfile} >> ${regression_logname_file}
    done
 
@@ -303,6 +300,11 @@ done
 ########################################################################################################################
 
 echo "${input_command}" > ${regression_command_file}
+
+# Create a shorthand reference, eg beluga@4k35d00r to be used by regression_status.sh script
+# Note: may be used in process_result.sh in the future
+hash=$(echo -n `readlink -f $regression_logname_file` | sha1sum | grep -oP '^\w{8}')
+reference="${local_cluster}@${hash}"
 
 echo ""
 

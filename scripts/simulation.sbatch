@@ -99,14 +99,14 @@ trap 'cleanupOnExit "EXIT"' EXIT
 # Launch pythons simulation -- THE ONLY PART YOU REALLY NEED!!
 ######################################################################
 job_name=$SLURM_JOB_NAME
-prolog_file=$output_dir/${job_name}.prolog
+slurm_logfile=$output_dir/${job_name}.slurm
 export PYTHONUNBUFFERED=1 # Not needed if already in bashrc
 
 for (( i=0; i<$num_proc_per_gpu; i++ ));
 do
 {
     gpu_process_logfile=$output_dir/${job_name}_proc_${i}.log
-    cp ${prolog_file} ${gpu_process_logfile}
+    cp ${slurm_logfile} ${gpu_process_logfile}
     echo "Launching ${python_script_path} on proc ${i}. Logfile:"
     echo ${gpu_process_logfile}
     export CUDA_VISIBLE_DEVICES=0

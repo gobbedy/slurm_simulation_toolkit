@@ -1,8 +1,25 @@
 #!/bin/bash
-set -o pipefail
 me=$(basename ${0%%@@*})
 full_me=${0%%@@*}
 me_dir=$(dirname $(readlink -f ${0%%@@*}))
+
+# if one of the commands in a pipe fails, the entire command returns non-zero code otherwise only the return code
+# of last command would be returned regardless if some earlier commands in the pipe failed
+set -o pipefail
+
+function showHelp {
+
+echo "NAME
+  $me -
+     1) Report regression status (running, completed, failed)
+     2) Print one line summary of results
+SYNOPSIS
+  $me [OPTIONS]
+OPTIONS
+  -h, --help
+                          Show this description
+"
+}
 
 function die {
   err_msg="$@"
@@ -16,7 +33,22 @@ function error {
   printf "$me: ERROR: %b\n" "${err_msg}" >&2
 }
 
-check_epochs=''
+while [[ "$1" == -* ]]; do
+  case "$1" in
+    -h|--help)
+      showHelp
+      exit 0
+    ;;
+	# START CHANGES HERE
+	# END CHANGES HERE
+    -*)
+      echo "Invalid option $1"
+      exit 1
+    ;;
+  esac
+done
+
+#check_epochs=''
 errors=0
 while [[ "$1" == -* ]]; do
   case "$1" in
@@ -38,8 +70,8 @@ done
 reference=$1
 hash_to_find="${reference##*@}"
 
-regression_dir=regressions
-local_regressions_filename_list=(`readlink -f ${regression_dir}/*`)
+regression_summary_dir=regression_summary
+local_regressions_filename_list=(`readlink -f ${regression_summary_dir}/*/log_manifest.txt`)
 declare -A local_regressions_filename_hashlist
 for local_regressions_filename in "${local_regressions_filename_list[@]}"
 do
@@ -50,9 +82,9 @@ do
 done
 
 log_manifest=${local_regressions_filename_hashlist[${hash_to_find}]}
-regression_name=$(basename ${log_manifest::-22})
-job_manifest="${log_manifest::-9}_jobs.txt"
-command_file="${log_manifest::-9}_command.txt"
+regression_summary_dirname=$(dirname ${log_manifest})
+job_manifest="${regression_summary_dirname}/job_manifest.txt"
+command_file="${regression_summary_dirname}/regression_command.txt"
 
 #echo "JOBS:"
 #cat $job_manifest
@@ -93,6 +125,8 @@ do
     dat=$(grep -oP -- '--directional_adversarial' $logfile)
     dataset=$(grep -oP -- '--dataset \w+' $logfile | grep -oP '\w+$')
     check_epochs=$(grep -oP -- '--epoch \d+' $logfile | grep -oP '\d+')
+    echo "EPOCHS:"
+    echo $num_epochs
     if [[ ${num_epochs} -ne ${check_epochs} ]]; then
       error "Detected only ${num_epochs} out of ${check_epochs} epochs in job ${jobid}."
       echo ${result_separator}

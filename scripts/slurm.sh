@@ -4,9 +4,9 @@ me=$(basename ${0%%@@*})
 full_me=${0%%@@*}
 me_dir=$(dirname $(readlink -f ${0%%@@*}))
 
-######################################################################
-# Helper functions
-######################################################################
+############################################################################################################
+######### HELPER VARIABLES AND FUNCTIONS -- DO NOT CHANGE UNLESS YOU KNOW WHAT YOU'RE DOING ################
+############################################################################################################
 
 function showHelp {
 
@@ -15,39 +15,59 @@ echo "NAME
      1) Runs slurm job using srun
      2) Uses CPU or GPU options defined in project.rc as SRUN_OPTIONS_CPU or SRUN_OPTIONS_GPU
 SYNOPSIS
-  $me [OPTIONS] [--num_cpus|--num_gpus|--job_name|--time] [script_name]
+  $me [OPTIONS] [SCRIPT_NAME]
 OPTIONS
   -h, --help
                           Show this description
-  -a, --account
-                          Which account to use (def-yymao or rrg-yymao)
+  --account ACCOUNT
+                          ACCOUNT is the slurm account to use for every job (def-yymao or rrg-yymao).
+                          Default is rrg-mao on Cedar, def-yymao otherwise.
+  -c, --num_cpus CPUS
+                          CPUS is the number of CPUs to be allocated to the job. Default 1.
+  --cmd, --command COMMAND
+                          COMMAND is the SLURM command to use: salloc, srun or sbatch. Default is salloc.
+                          If salloc, SCRIPT_NAME need not be provided.
+                          If srun or sbatch, SCRIPT_NAME must be provide.
+  -e, --export EXPORT
+                          EXPORT is a comma-separated list of environment variables to be passed down to the sbatch
+                          script (aka SCRIPT_NAME). eg 'a=2,str=\"hello\"'
+  -g, --num_gpus NUM_GPUS
+                          NUM_GPUS is the of GPUs to be allocated to the job. Default 0.
+  -j, --job_name JOB_NAME
+                          JOB_NAME is the name of job to be displayed in SLURM queue.
+  -m, --mem MEM
+                          MEM is the amount of memory (eg 500m, 7g) to request. Default 256m.
   --mail EMAIL
                           Send user e-mail when job ends. Sends e-mail to EMAIL
-  -c, --num_cpus
-                          Number of CPUs to be allocated to the job. Default 1.
-  --cmd, --command
-                          The SLURM command to use: salloc, srun or sbatch. Default is srun.
-                          If salloc, not script_name must not be provided.
-                          If srun or sbatch, script_name must be provide.
-  -e, --export
-                          Which SLURM command (salloc, srun, sbatch) to use. Default salloc.
-  -g, --num_gpus
-                          Number of GPUs to be allocated to the job. Default 0.
-  -j, --job_name
-                          Name of job to be displayed in SLURM queue.
-  -m, --mem
-                          Amount of memory (eg 500m, 7g). Default 256m.
-  -n, --nodes
-                          Number of compute nodes.
-  -o, --output
-                          Logfile name.
+  -n, --nodes NODES
+                          NODES is the number of compute nodes to request.
+
+  --num_proc_per_gpu PROCS
+                          PROCS is the number of processes, aka simulations, to run on the requested compute resource.
+
+                          If for example you are running the command 'train.py --epochs 200' on a GPU resource, and PROC
+                          is 3, then 3 instances of 'train.py --epochs 200' will be launched in parallel on the GPU.
+
+                          Default is 2 (process per resource) on Beihang cluster, 1 otherwise.
+  --output LOGFILE
+                          Logfile is the SLURM output filename.
   -s, --test
                           Run slurm command in test mode. Command that *would* be run is printed
                           but job is not actually scheduled.
                           Can be used to test the launch scripts themselves.
-  -t, --time
-                          Time allocated to the job: As of July 2018, admin max is 3 hours. The job will be interrupted
-                          if the script is still running.
+
+  --singleton
+                          If provided, only one job named JOB_NAME will run at a time by this user on this cluster. If
+                          a job named JOB_NAME is already running, this job will wait for that job to finish before
+                          starting. Similarly, if this job is running, any future job named JOB_NAME and having used
+                          the --singleton switch will wait for this job to finish.
+
+  -t, --time TIME
+                          TIME is the clock time allocated to the job: As of July 2018, salloc max is 3 hours.
+                          The job will be interrupted if the script is still running after the time limit is up.
+
+  --wait_for_job JOB_ID
+                          If provided, the current job will wait for job with ID JOB_ID before starting.
 "
 }
 
@@ -56,19 +76,55 @@ function die {
   exit 1
 }
 
+# Get name of cluster we're on
+node_prefix=$(hostname | cut -c1-3)
+if [[ $node_prefix == "hel" ]]; then
+   local_cluster=helios
+elif [[ $node_prefix == "del" ]]; then
+   local_cluster=beihang
+elif [[ $node_prefix == "nia" ]]; then
+   local_cluster=niagara
+elif [[ $node_prefix == "bel" ]]; then
+   local_cluster=beluga
+elif [[ $node_prefix == "ced" ]]; then
+   local_cluster=cedar
+elif [[ $node_prefix == "gra" ]]; then
+   local_cluster=graham
+elif [[ $node_prefix == ip* ]]; then
+   local_cluster=mammouth
+else
+  echo "WARNING: local cluster unsupported"
+fi
+
+
+########################################################################################################################
+######################## SET DEFAULT REGRESSION PARAMETERS -- CHANGE THESE OPTIONALLY ##################################
+########################################################################################################################
+if [[ $local_cluster == "cedar" ]]; then
+    account="rrg-yymao"
+else
+    account="def-yymao"
+fi
+if [[ $local_cluster == "beihang" ]]; then
+    num_proc_per_gpu=2
+else
+    num_proc_per_gpu=1
+fi
 time="00:01:00"
 job_name=portfolio
 num_cpus=1
 num_gpus=0
-num_proc_per_gpu=1
 mem=256m
 slurm_command=srun
 mail='' 
 slurm_test_mode=''
 singleton=''
-account="def-yymao"
 blocking_job_id=''
 
+########################################################################################################################
+###################################### ARGUMENT PROCESSING AND CHECKING ################################################
+##################################### YOU SHOULD NOT NEED TO CHANGE THIS ###############################################
+########################################################################################################################
 while [[ "$1" == -* ]]; do
   case "$1" in
     -h|--help)
@@ -79,25 +135,8 @@ while [[ "$1" == -* ]]; do
       account=$2
       shift 2
     ;;
-    --mail)
-      mail=yes
-      EMAIL=$2
-      shift 2
-      if [[ ${EMAIL} == -* ]]; then
-          echo "ERROR: invalid email: ${EMAIL}"
-          exit 1
-      fi
-      if [[ ${EMAIL} != *@* ]]; then
-          echo "ERROR: invalid email: ${EMAIL}"
-          exit 1
-      fi
-    ;;
     -c|--num_cpus)
       num_cpus=$2
-      shift 2
-    ;;
-    --num_proc_per_gpu)
-      num_proc_per_gpu=$2
       shift 2
     ;;
     --cmd|--command)
@@ -120,12 +159,29 @@ while [[ "$1" == -* ]]; do
       mem=$2
       shift 2
     ;;
+    --mail)
+      mail=yes
+      EMAIL=$2
+      shift 2
+      if [[ ${EMAIL} == -* ]]; then
+          echo "ERROR: invalid email: ${EMAIL}"
+          exit 1
+      fi
+      if [[ ${EMAIL} != *@* ]]; then
+          echo "ERROR: invalid email: ${EMAIL}"
+          exit 1
+      fi
+    ;;
     -n|--nodes)
       num_nodes=$2
       shift 2
     ;;
-    --prolog)
-      prolog_file=$2
+    --num_proc_per_gpu)
+      num_proc_per_gpu=$2
+      shift 2
+    ;;
+    --output)
+      output_file=$2
       shift 2
     ;;
     -s|--test)
@@ -155,35 +211,21 @@ while [[ "$1" == -* ]]; do
   esac
 done
 
-node_prefix=$(hostname | cut -c1-3)
-if [[ $node_prefix == "hel" ]]; then
-   local_cluster=helios
-elif [[ $node_prefix == "del" ]]; then
-   local_cluster=beihang
-elif [[ $node_prefix == "nia" ]]; then
-   local_cluster=niagara
-elif [[ $node_prefix == "bel" ]]; then
-   local_cluster=beluga
-elif [[ $node_prefix == "ced" ]]; then
-   local_cluster=cedar
-elif [[ $node_prefix == "gra" ]]; then
-   local_cluster=graham
-elif [[ $node_prefix == ip* ]]; then
-   local_cluster=mammouth
-else
-  echo "WARNING: local cluster unsupported"
-fi
 
-# should be /32 instead of /48 on graham
-# But I haven't used this option in years anyway
+########################################################################################################################
+########################################### BUILD SLURM OPTIONS ########################################################
+##################################### YOU SHOULD NOT NEED TO CHANGE THIS ###############################################
+########################################################################################################################
+
+# request the right number of nodes based on the number of CPU requested
 if [[ ${local_cluster} == "graham" ]]; then
   num_nodes=$((( ($num_cpus-1) / 32) + 1 ))
 elif [[ -z ${num_nodes} ]]; then
   num_nodes=$((( ($num_cpus-1) / 48) + 1 ))
 fi
 
-if [[ -z ${prolog_file} ]]; then
-  prolog_file=${job_name}.prolog
+if [[ -z ${output_file} ]]; then
+  output_file=${job_name}.slurm
 fi
 
 if [[ "${slurm_command}" == "salloc" ]]; then
@@ -200,14 +242,13 @@ else
 fi
 
 slurm_options="--time=${time} --job-name=${job_name} --nodes=${num_nodes}"
-slurm_options+=" --output=${prolog_file} --open-mode=append"
+slurm_options+=" --output=${output_file} --open-mode=append"
 
 if [[ ${local_cluster} != "beihang" ]]; then
     slurm_options+=" --account=${account}"
 fi
 
 if [[ -n ${mail} ]]; then
-  #slurm_options+=" --mail-type=BEGIN --mail-type=END --mail-type=REQUEUE --mail-user=gperr050@uottawa.ca"
   slurm_options+=" --mail-type=END --mail-user=${EMAIL} --signal=USR1@5"
   export+=",mail=yes"
 fi
@@ -222,8 +263,6 @@ fi
 
 if [[ ${local_cluster} == "niagara" ]]; then
     slurm_options+=" --ntasks=${num_cpus}"
-#elif [[ ${local_cluster} == "beihang" ]]; then
-#    :
 else
     if [[ ${num_cpus} -gt 0 ]]; then
       slurm_options+=" --ntasks=${num_cpus}"
@@ -239,6 +278,13 @@ fi
 if [[ -n ${blocking_job_id} ]]; then
   slurm_options+=" --dependency=afterany:${blocking_job_id}"
 fi
+
+
+
+########################################################################################################################
+############################################# LAUNCH SLURM COMMAND #####################################################
+##################################### YOU SHOULD NOT NEED TO CHANGE THIS ###############################################
+########################################################################################################################
 
 if [[ ${slurm_command} == "salloc" ]]; then
   slurm_run_command="${slurm_command} ${slurm_options}"
