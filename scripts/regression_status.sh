@@ -55,15 +55,9 @@ while [[ "$1" == -* ]]; do
   esac
 done
 
-#check_epochs=''
 errors=0
 while [[ "$1" == -* ]]; do
   case "$1" in
-    #--check_epochs)
-    #  # only process first "epochs" epochs
-    #  check_epochs=$2
-    #  shift 2
-    #;;
     -*)
       die "Invalid option $1"
     ;;
@@ -183,7 +177,7 @@ if [[ ${errors} -gt 0 ]]; then
     fi
 else
     if [[ ${num_completed_jobs} -ne ${num_logs} ]]; then
-        echo "REGRESSION IN PROGRESS: ${num_completed_jobs}/${num_logs} simulations complete (No errors so far)."
+        echo "REGRESSION IN PROGRESS: ${num_completed_jobs}/${num_logs} simulations complete. No errors so far."
         exit 2
     else
         echo "REGRESSION SUCCEEDED: ${num_completed_jobs}/${num_logs} simulations complete."
