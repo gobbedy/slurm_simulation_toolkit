@@ -19,7 +19,7 @@ Add the scripts directory to your path:
 
 ## slurm.sh
 
-Wraps sbatch, srun, salloc SLURM commands. sbatch more heavily test.
+Wraps sbatch SLURM command. Also supports srun and salloc in theory, but only sbatch is thoroughly tested.
 
 Handles low-level SLURM switches and parameters that do not need to be exposed to the user.
 
