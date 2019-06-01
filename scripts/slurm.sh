@@ -114,11 +114,17 @@ blocking_job_id=''
 ##################################### YOU SHOULD NOT NEED TO CHANGE THIS ###############################################
 ########################################################################################################################
 script_name=''
-while [[ "$1" == -* ]]; do
+while [[ $# -ne 0 ]]; do
   case "$1" in
     -h|--help)
       showHelp
       exit 0
+    ;;
+    --)
+      shift 1
+      # pass all arguments following '--' to child script
+      child_args="$@"
+      break
     ;;
     -a|--account)
       account=$2
@@ -234,7 +240,6 @@ else
     >&2 echo "$me: ERROR: require exactly 1 script to run"
     exit 1
   fi
-  script_name=$1
 fi
 
 slurm_options="--time=${time} --job-name=${job_name} --nodes=${num_nodes}"

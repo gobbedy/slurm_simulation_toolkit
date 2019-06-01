@@ -148,11 +148,17 @@ job_name='dat'
 ############################### YOU MUST CHANGE THIS! SEE THE ALLOTTED PLACE FOR CHANGES ###############################
 ########################################################################################################################
 
-while [[ "$1" == * ]]; do
+while [[ $# -ne 0 ]]; do
   case "$1" in
     -h|--help)
       showHelp
       exit 0
+    ;;
+    --)
+      shift 1
+      # pass all arguments following '--' to child script
+      child_args="$@"
+      break
     ;;
     --account)
       account=$2
@@ -362,7 +368,7 @@ echo ""
 
 # launch job (more exactly, call job launching script slurm.sh)
 #module load python/3.6.3
-slurm.sh ${simulation_options} -e "${export}" "${sbatch_script_path}" |& tee -a ${slurm_logfile}
+slurm.sh ${simulation_options} -e "${export}" --script_name "${sbatch_script_path}" |& tee -a ${slurm_logfile}
 
 # same slurm_logfile will be used to output job content -- add a header to separate this script's output from slurm.sh output
 echo "" >> ${slurm_logfile}

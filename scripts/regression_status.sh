@@ -18,6 +18,9 @@ SYNOPSIS
 OPTIONS
   -h, --help
                           Show this description
+  --ref REF
+                          REF is a short reference to the regression outputted by the mini_regression.sh script.
+                          The format is <cluster_name>@<hash_of_log_manifest_filename>
 "
 }
 
@@ -38,6 +41,10 @@ while [[ "$1" == -* ]]; do
     -h|--help)
       showHelp
       exit 0
+    ;;
+    --ref)
+      reference=$2
+      shift 2
     ;;
 	# START CHANGES HERE
 	# END CHANGES HERE
@@ -67,11 +74,6 @@ if [[ $# -ne 0 ]]; then
     die "ERROR: unparsed arguments $@"
 fi
 
-#if [[ -z ${check_epochs} ]]; then
-#  die "must provide number of epochs via --check_epochs"
-#fi
-
-reference=$1
 hash_to_find="${reference##*@}"
 
 regression_summary_dir=regression_summary
@@ -108,29 +110,49 @@ test_errors=()
 for (( i=0; i<$num_logs; i++ ));
 do
     logfile=${logfiles[$i]}
+    slurm_logfile=$(ls $(dirname $logfile)/*slurm)
+
+    batch_size=$(grep -oP -- '--batch_size \d+' $slurm_logfile | grep -oP '\d+')
+    label_dim=$(grep -oP -- '--label_dim \d+' $slurm_logfile | grep -oP '\d+')
+    lam_parameters=$(grep -oP -- '--lam_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oP '[\w\.]+ [\w\.]+$')
+    gam_parameters=$(grep -oP -- '--gamma_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oP '[\w\.]+ [\w\.]+$')
+    dat_parameters=$(grep -oP -- '--dat_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oP '[\w\.]+ [\w\.]+$')
+    dat_transform=$(grep -oP -- '--dat_transform' $slurm_logfile)
+    no_mixup=$(grep -oP -- '--no_mixup' $slurm_logfile)
+    cosine_loss=$(grep -oP -- '--cosine_loss' $slurm_logfile)
+    dat=$(grep -oP -- '--directional_adversarial' $slurm_logfile)
+    dataset=$(grep -oP -- '--dataset \w+' $slurm_logfile | grep -oP '\w+$')
+    check_epochs=$(grep -oP -- '--epoch \d+' $slurm_logfile | grep -oP '\d+')
+
     echo ${result_separator}
     echo "LOGFILE: $logfile"
     jobid=${jobid_list[$i]}
+
+    job_failed=`sacct -j ${jobid} -o State -n | grep FAILED`
+    if [[ -n ${job_failed} ]]; then
+        error "Job ${jobid} completed but failed. Check ${slurm_logfile}"
+        echo ${result_separator}
+        num_completed_jobs=$(( num_completed_jobs + 1 ))
+        continue
+    fi
+
+    job_pending=`sacct -j ${jobid} -o State -n | grep PENDING`
+    if [[ -n ${job_pending} ]]; then
+        echo "Job ${jobid} has not yet started."
+        echo ${result_separator}
+        continue
+    fi
+
     num_epochs=$(grep -c "Test Acc:" ${logfile})
     job_running=`sacct -j ${jobid} -o State -n | grep RUNNING`
     if [[ -n ${job_running} ]]; then
-        echo "Completed ${num_epochs} epochs (job ${jobid} still running)."
+        echo "Completed ${num_epochs} out of ${check_epochs} epochs (job ${jobid} still running)."
         echo ${result_separator}
         continue
-    else
-        num_completed_jobs=$(( num_completed_jobs + 1 ))
     fi
-    batch_size=$(grep -oP -- '--batch_size \d+' $logfile | grep -oP '\d+')
-    label_dim=$(grep -oP -- '--label_dim \d+' $logfile | grep -oP '\d+')
-    lam_parameters=$(grep -oP -- '--lam_parameters [\w\.]+ [\w\.]+' $logfile | grep -oP '[\w\.]+ [\w\.]+$')
-    gam_parameters=$(grep -oP -- '--gamma_parameters [\w\.]+ [\w\.]+' $logfile | grep -oP '[\w\.]+ [\w\.]+$')
-    dat_parameters=$(grep -oP -- '--dat_parameters [\w\.]+ [\w\.]+' $logfile | grep -oP '[\w\.]+ [\w\.]+$')
-    dat_transform=$(grep -oP -- '--dat_transform' $logfile)
-    no_mixup=$(grep -oP -- '--no_mixup' $logfile)
-    cosine_loss=$(grep -oP -- '--cosine_loss' $logfile)
-    dat=$(grep -oP -- '--directional_adversarial' $logfile)
-    dataset=$(grep -oP -- '--dataset \w+' $logfile | grep -oP '\w+$')
-    check_epochs=$(grep -oP -- '--epoch \d+' $logfile | grep -oP '\d+')
+
+    num_completed_jobs=$(( num_completed_jobs + 1 ))
+
     echo "EPOCHS:"
     echo $num_epochs
     if [[ ${num_epochs} -ne ${check_epochs} ]]; then

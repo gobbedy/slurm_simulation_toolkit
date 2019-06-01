@@ -1,0 +1,5 @@
+# ADD scripts to PATH variable
+export PATH=$PWD/scripts:$PATH
+
+# source virtual environment
+#source ~/mixup_paper/bin/activate

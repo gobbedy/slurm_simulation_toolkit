@@ -136,11 +136,17 @@ max_jobs_in_parallel=''
 ############################### YOU MUST CHANGE THIS! SEE THE ALLOTTED PLACE FOR CHANGES ###############################
 ########################################################################################################################
 blocking_jobs=()
-while [[ "$1" == * ]]; do
+while [[ $# -ne 0 ]]; do
   case "$1" in
     -h|--help)
       showHelp
       exit 0
+    ;;
+    --)
+      shift 1
+      # pass all arguments following '--' to child script
+      child_args="$@"
+      break
     ;;
     --account)
       account=$2
@@ -190,10 +196,6 @@ while [[ "$1" == * ]]; do
     ;;
   esac
 done
-
-if [[ $# -ne 0 ]]; then
-    die "ERROR: unparsed arguments $@"
-fi
 
 if (( ${num_simulations} % ${num_proc_per_gpu} )) ; then
   die "$num_simulations not divisible by $num_proc_per_gpu"
@@ -245,7 +247,6 @@ job_script_options+=" --epochs ${epochs} --batch_size ${batch_size} --dataset ${
 ########################################################################################################################
 ################### LAUNCH THE JOBS -- DON'T CHANGE THIS UNLESS YOU KNOW WHAT YOU'RE DOING #############################
 ########################################################################################################################
-
 for (( i=0; i<$num_jobs; i++ ));
 do
 
@@ -265,11 +266,11 @@ do
 
    job_unique_options+=" --job_name ${job_name}"
 
-   ${job_script_executable} ${job_script_options} ${job_unique_options}  |tee tmp_output.log
+   ${job_script_executable} ${job_script_options} ${job_unique_options}  |tee ~/tmp_output.log
 
-   slurm_logfile=$(grep -oP '(?<=--output=)[^ ]+' tmp_output.log)
-   job_number=$(grep "Submitted" tmp_output.log | grep -oP '\d+$')
-   rm tmp_output.log
+   slurm_logfile=$(grep -oP '(?<=--output=)[^ ]+' ~/tmp_output.log)
+   job_number=$(grep "Submitted" ~/tmp_output.log | grep -oP '\d+$')
+   rm ~/tmp_output.log
 
    for (( j=0; j<$num_proc_per_gpu; j++ )); do
       slurm_logdirname=`dirname $slurm_logfile`
