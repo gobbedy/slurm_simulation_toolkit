@@ -1,4 +1,4 @@
-#!/bin/bash
+#!#!/usr/bin/env bash
 
 ######################################################################
 # THE ONLY PART YOU REALLY NEED IS AT THE VERY END!!

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #######################################################################################################################
 ############## HELPER VARIABLES AND FUNCTIONS -- DO NOT CHANGE UNLESS YOU KNOW WHAT YOU'RE DOING ######################
@@ -97,23 +97,9 @@ function die {
 }
 
 # Get name of cluster we're on
-node_prefix=$(hostname | cut -c1-3)
-if [[ $node_prefix == "hel" ]]; then
-   local_cluster=helios
-elif [[ $node_prefix == "del" ]]; then
-   local_cluster=beihang
-elif [[ $node_prefix == "nia" ]]; then
-   local_cluster=niagara
-elif [[ $node_prefix == "bel" ]]; then
-   local_cluster=beluga
-elif [[ $node_prefix == "ced" ]]; then
-   local_cluster=cedar
-elif [[ $node_prefix == "gra" ]]; then
-   local_cluster=graham
-elif [[ $node_prefix == ip* ]]; then
-   local_cluster=mammouth
-else
-  echo "WARNING: local cluster unsupported"
+local_cluster=$(get_local_cluster.sh)
+if [[ ${local_cluster} == "unsupported" ]]; then
+    die "ERROR: local cluster unsupported"
 fi
 
 # Echo the command run by the user
@@ -151,7 +137,7 @@ max_jobs_in_parallel=''
 ############################### YOU MUST CHANGE THIS! SEE THE ALLOTTED PLACE FOR CHANGES ###############################
 ########################################################################################################################
 blocking_jobs=()
-while [[ "$1" == -* ]]; do
+while [[ "$1" == * ]]; do
   case "$1" in
     -h|--help)
       showHelp

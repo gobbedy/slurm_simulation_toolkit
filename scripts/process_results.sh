@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 me=$(basename ${0%%@@*})
 full_me=${0%%@@*}
 
@@ -203,26 +203,16 @@ fi
 sed_exclude_option=`printf '%sd;' "${exclude_list[@]}"`
 
 ################## SETUP REMOTE LOGIN ####################
-node_prefix=$(hostname | cut -c1-3)
-if [[ $node_prefix == "hel" ]]; then
-   local_cluster=helios
-elif [[ $node_prefix == "nia" ]]; then
-   local_cluster=niagara
-elif [[ $node_prefix == "bel" ]]; then
-   local_cluster=beluga
+local_cluster=$(get_local_cluster.sh)
+if [[ ${local_cluster} == "unsupported" ]]; then
+    die "ERROR: local cluster unsupported"
+fi
+
+if [[ ${local_cluster} == "unsupported" ]]; then
    # beluga doesn't support mailing, so need to use cedar
    ssh_mail_node="gobbedy@cedar.computecanada.ca"
    ssh $ssh_mail_node "bash -s" -- < $full_me $original_options
    exit
-elif [[ $node_prefix == "ced" ]]; then
-   local_cluster=cedar
-elif [[ $node_prefix == "del" ]]; then
-   local_cluster=beihang
-elif [[ $node_prefix == "gra" ]]; then
-   local_cluster=graham
-else
-   echo "ERROR: local cluster prefix \"${node_prefix}\" unrecognized"
-   exit 1
 fi
 
 if [[ -n ${cluster} ]]; then

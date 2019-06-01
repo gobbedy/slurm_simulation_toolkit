@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 me=$(basename ${0%%@@*})
 full_me=${0%%@@*}
 me_dir=$(dirname $(readlink -f ${0%%@@*}))
@@ -113,6 +113,8 @@ do
         echo "Completed ${num_epochs} epochs (job ${jobid} still running)."
         echo ${result_separator}
         continue
+    else
+        num_completed_jobs=$(( num_completed_jobs + 1 ))
     fi
     batch_size=$(grep -oP -- '--batch_size \d+' $logfile | grep -oP '\d+')
     label_dim=$(grep -oP -- '--label_dim \d+' $logfile | grep -oP '\d+')
@@ -138,8 +140,6 @@ do
     average_test_error=$(grep -oP '(?<=Test Acc: )[^%]+' ${logfile} | head -n ${num_epochs} | tail -n 10 | awk '{print 1-$1/100}' | paste -sd+ | bc | awk '{print $1*10}')
     test_errors+=(${average_test_error})
 
-    num_completed_jobs=$(( num_completed_jobs + 1 ))
-
     echo ${result_separator}
 done
 
@@ -157,7 +157,7 @@ if [[ ${errors} -gt 0 ]]; then
     fi
 else
     if [[ ${num_completed_jobs} -ne ${num_logs} ]]; then
-        echo "REGRESSION IN PROGRESS: ${num_completed_jobs}/${num_logs} simulations complete."
+        echo "REGRESSION IN PROGRESS: ${num_completed_jobs}/${num_logs} simulations complete (No errors so far)."
         exit 2
     else
         echo "REGRESSION SUCCEEDED: ${num_completed_jobs}/${num_logs} simulations complete."
@@ -168,7 +168,11 @@ sum_test_error=$( IFS="+"; bc <<< "${test_errors[*]}" )
 test_error_mean=$(awk "BEGIN {print ${sum_test_error}/${num_completed_jobs}; exit}")
 if [[ ${num_completed_jobs} -gt 1 ]]; then
     test_error_std_dev=$(printf '%s\n' "${test_errors[@]}"  | awk "{sumsq+=(${test_error_mean}-\$1)**2}END{print sqrt(sumsq/(NR-1))}")
+    if [[ ${test_error_std_dev} -eq 0 ]]; then
+        die "ERROR: Standard deviation is 0. Did all simulations use the same seed?"
+    fi
     std_dev_mean=$(echo "${test_error_std_dev}/sqrt(${num_processed_logs})" | bc -l)
+    echo C
 else
     std_dev_mean="N/A"
 fi
