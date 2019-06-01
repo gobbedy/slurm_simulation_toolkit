@@ -1,4 +1,4 @@
-# Work in progress. This introduction is not complete and the code is not ready to be used.
+Work in progress. This introduction is not complete and the code is not ready to be used.
 
 # compute_canada_template_project
 By Guillaume Perrault-Archambault
@@ -27,7 +27,7 @@ Run ```slurm.sh --help``` for usage.
 
 ## simulation.sh.
 
-Wraps slurm.sh. Inteneded to handle static simulation parameters that don not need to be updated frequently, as well as generating a new simulation output directory for each run.
+Wraps slurm.sh. Intended to handle static simulation parameters that do not need to be updated frequently, as well as generating a new simulation output directory for each run.
 
 Run ```simulation.sh --help``` for usage.
 
