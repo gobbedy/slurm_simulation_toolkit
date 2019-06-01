@@ -1,19 +1,12 @@
 #!/usr/bin/env bash
+me_dir=$(dirname $(readlink -f ${0%%@@*}))
+source ${me_dir}/simulation_toolkit.rc
 
 #######################################################################################################################
 ########################################### HELPER VARIABLES AND FUNCTIONS ############################################
 #######################################################################################################################
-me=$(basename ${0%%@@*})
-full_me=${0%%@@*}
-me_dir=$(dirname $(readlink -f ${0%%@@*}))
-parent_dir=$(dirname $me_dir)
-datetime_suffix=$(date +%b%d_%H%M%S)
-job_script_executable="simulation.sh"
 
-
-# if one of the commands in a pipe fails, the entire command returns non-zero code otherwise only the return code
-# of last command would be returned regardless if some earlier commands in the pipe failed
-set -o pipefail
+simulation_executable="simulation.sh"
 
 function showHelp {
 
@@ -77,18 +70,6 @@ OPTIONS
 "
 }
 
-function die {
-  err_msg="$@"
-  printf "$me: %b\n" "${err_msg}" >&2
-  exit 1
-}
-
-# Get name of cluster we're on
-local_cluster=$(get_local_cluster.sh)
-if [[ ${local_cluster} == "unsupported" ]]; then
-    die "ERROR: local cluster unsupported"
-fi
-
 # Echo the command run by the user
 # useful if scrolling up in the shell or if called by wrapper script
 input_command="${me} $@"
@@ -100,20 +81,7 @@ echo ""
 ########################################################################################################################
 ######################## SET DEFAULT REGRESSION PARAMETERS -- CHANGE THESE OPTIONALLY ##################################
 ########################################################################################################################
-
-if [[ $local_cluster == "cedar" ]]; then
-    account="rrg-yymao"
-else
-    account="def-yymao"
-fi
-if [[ $local_cluster == "beihang" ]]; then
-    num_proc_per_gpu=2
-else
-    num_proc_per_gpu=1
-fi
 num_simulations=12
-time="0-4:00:00"
-job_basename='dat' # job_name will be job_basename unless '--max_jobs_in_parallel' argument is provided
 max_jobs_in_parallel=''
 
 ########################################################################################################################
@@ -141,7 +109,7 @@ while [[ $# -ne 0 ]]; do
       shift 2
     ;;
     --job_name)
-      job_basename=$2
+      job_name=$2
       shift 2
     ;;
     --max_jobs_in_parallel)
@@ -212,27 +180,27 @@ do
    if [[ "${#blocking_jobs[@]}" -gt 0 ]]; then
      job_unique_options+=" --wait_for_job ${blocking_jobs[$i]}"
    fi
-   
-   job_name=$job_basename
+
+   individual_job_name=$job_name
    if [[ -n ${max_jobs_in_parallel} ]]; then
         last_singleton_id=`cat ${regression_summary_dir}/singleton_id.txt`
         singleton_id=$(((last_singleton_id+1) % ${max_jobs_in_parallel}))
         echo ${singleton_id} > ${regression_summary_dir}/singleton_id.txt
-        job_name+="_${singleton_id}"
+        individual_job_name+="_${singleton_id}"
         job_unique_options+=' --singleton'
    fi
 
-   job_unique_options+=" --job_name ${job_name}"
+   job_unique_options+=" --job_name ${individual_job_name}"
 
-   ${job_script_executable} ${job_script_options} ${job_unique_options} -- ${child_args}  |tee ~/tmp_output.log
+   ${simulation_executable} ${job_script_options} ${job_unique_options} -- ${child_args}  |tee ~/tmp_output.log
 
    slurm_logfile=$(grep -oP '(?<=--output=)[^ ]+' ~/tmp_output.log)
    job_number=$(grep "Submitted" ~/tmp_output.log | grep -oP '\d+$')
    rm ~/tmp_output.log
 
    for (( j=0; j<$num_proc_per_gpu; j++ )); do
-      slurm_logdirname=`dirname $slurm_logfile`
-      slurm_logbasename=`basename $slurm_logfile`
+      slurm_logdirname=$(dirname $slurm_logfile)
+      slurm_logbasename=$(basename $slurm_logfile)
       gpu_number=${j}
       log_basename="${slurm_logbasename%.*}_proc_${gpu_number}.log"
       logfile=$slurm_logdirname/${log_basename}

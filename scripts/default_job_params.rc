@@ -1,0 +1,84 @@
+# Set the default time, nodes, cpus, gpus, memory to request by cluster
+# These can be overriden from the command line
+
+# job_name will be job_basename unless '--max_jobs_in_parallel' argument is provided in mini_regression.sh
+job_basename='dat'
+email=no
+test_mode=no
+
+# if 'email' above is set to 'yes', your e-mail address is used by slurm.sh to e-mail you at end of simulation
+# you will get a separate e-mail at the end of each simulation
+EMAIL=youremail@uottawa.ca
+
+if [[ $local_cluster == "cedar" ]]; then
+    account="rrg-yymao"
+else
+    account="def-yymao"
+fi
+if [[ $local_cluster == "beihang" ]]; then
+    num_proc_per_gpu=2
+else
+    num_proc_per_gpu=1
+fi
+time="0-4:00:00"
+
+gpus=1
+if [[ ${local_cluster} == "mammouth" ]]; then
+    # mammouth
+    time="2-00:00:00"
+    nodes=1
+    cpus=24
+    mem=256gb
+elif [[ ${local_cluster} == "cedar" ]]; then
+    if [[ ${gpus} == 0 ]]; then
+        time="1-00:00:00"
+        nodes=1
+        cpus=32
+        mem=257000M
+    else
+        nodes=1
+        cpus=6
+        mem=3200M
+    fi
+elif [[ ${local_cluster} == "beihang" ]]; then
+    if [[ ${gpus} == 0 ]]; then
+        time="1-00:00:00"
+        nodes=1
+        cpus=32
+        mem=257000M
+    else
+        nodes=1
+        cpus=10
+        mem=''
+    fi
+elif [[ ${local_cluster} == "graham" ]]; then
+    if [[ ${gpus} == 0 ]]; then
+        time="1-00:00:00"
+        nodes=1
+        cpus=32
+        mem=128000M
+    else
+        nodes=1
+        cpus=16
+        mem=63759M
+    fi
+elif [[ ${local_cluster} == "beluga" ]]; then
+    if [[ ${gpus} == 0 ]]; then
+        account=rrg-yymao
+        time="1-00:00:00"
+        nodes=1
+        cpus=40
+        mem=191000M
+    else
+        nodes=1
+        cpus=10
+        mem=47750M
+    fi
+elif [[ ${local_cluster} == "niagara" ]]; then
+    time="1-00:00:00"
+    nodes=1
+    cpus=80
+    gpus=0
+    mem=100G
+fi
+

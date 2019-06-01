@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-set -o pipefail
-me=$(basename ${0%%@@*})
-full_me=${0%%@@*}
 me_dir=$(dirname $(readlink -f ${0%%@@*}))
+source ${me_dir}/simulation_toolkit.rc
 
 ############################################################################################################
 ######################################## HELPER VARIABLES AND FUNCTIONS ####################################
@@ -73,40 +71,12 @@ OPTIONS
 "
 }
 
-function die {
-  printf "${me}: %b\n" "$@" >&2
-  exit 1
-}
-
-# Get name of cluster we're on
-local_cluster=$(get_local_cluster.sh)
-if [[ ${local_cluster} == "unsupported" ]]; then
-    die "ERROR: local cluster unsupported"
-fi
-
 
 ########################################################################################################################
 ########################################## SET DEFAULT REGRESSION PARAMETERS ###########################################
 ########################################################################################################################
-if [[ $local_cluster == "cedar" ]]; then
-    account="rrg-yymao"
-else
-    account="def-yymao"
-fi
-if [[ $local_cluster == "beihang" ]]; then
-    num_proc_per_gpu=2
-else
-    num_proc_per_gpu=1
-fi
-time="00:01:00"
-job_name=portfolio
-num_cpus=1
-num_gpus=0
-mem=256m
 slurm_command=srun
-mail='' 
-slurm_test_mode=''
-singleton=''
+singleton=no
 blocking_job_id=''
 
 ########################################################################################################################
@@ -132,7 +102,7 @@ while [[ $# -ne 0 ]]; do
       shift 2
     ;;
     -c|--num_cpus)
-      num_cpus=$2
+      cpus=$2
       shift 2
     ;;
     --cmd|--command)
@@ -144,7 +114,7 @@ while [[ $# -ne 0 ]]; do
       shift 2
     ;;
     -g|--num_gpus)
-      num_gpus=$2
+      gpus=$2
       shift 2
     ;;
     -j|--job_name)
@@ -156,7 +126,7 @@ while [[ $# -ne 0 ]]; do
       shift 2
     ;;
     --mail)
-      mail=yes
+      email=yes
       EMAIL=$2
       shift 2
       if [[ ${EMAIL} == -* ]]; then
@@ -217,9 +187,9 @@ done
 
 # request the right number of nodes based on the number of CPU requested
 if [[ ${local_cluster} == "graham" ]]; then
-  num_nodes=$((( ($num_cpus-1) / 32) + 1 ))
+  num_nodes=$((( ($cpus-1) / 32) + 1 ))
 elif [[ -z ${num_nodes} ]]; then
-  num_nodes=$((( ($num_cpus-1) / 48) + 1 ))
+  num_nodes=$((( ($cpus-1) / 48) + 1 ))
 fi
 
 if [[ -z ${output_file} ]]; then
@@ -245,30 +215,30 @@ if [[ ${local_cluster} != "beihang" ]]; then
     slurm_options+=" --account=${account}"
 fi
 
-if [[ -n ${mail} ]]; then
+if [[ ${email} == "yes" ]]; then
   slurm_options+=" --mail-type=END --mail-user=${EMAIL} --signal=USR1@5"
   export+=",mail=yes"
 fi
 
-if [[ -n ${slurm_test_mode} ]]; then 
+if [[ ${slurm_test_mode} == "yes" ]]; then
   slurm_options+=" --test-only"
 fi
 
-if [[ -n ${singleton} ]]; then
+if [[ ${singleton} == "yes" ]]; then
   slurm_options+=" --dependency=singleton"
 fi
 
 if [[ ${local_cluster} == "niagara" ]]; then
-    slurm_options+=" --ntasks=${num_cpus}"
+    slurm_options+=" --ntasks=${cpus}"
 else
-    if [[ ${num_cpus} -gt 0 ]]; then
-      slurm_options+=" --ntasks=${num_cpus}"
+    if [[ ${cpus} -gt 0 ]]; then
+      slurm_options+=" --ntasks=${cpus}"
     fi
     slurm_options+=" --mem=${mem}"
 fi
 
-if [[ ${num_gpus} -gt 0 ]]; then
-  slurm_options+=" --gres=gpu:${num_gpus}"
+if [[ ${gpus} -gt 0 ]]; then
+  slurm_options+=" --gres=gpu:${gpus}"
   export+=",num_proc_per_gpu=${num_proc_per_gpu}"
 fi
 

@@ -1,10 +1,6 @@
 #!/usr/bin/env bash
-me=$(basename ${0%%@@*})
-full_me=${0%%@@*}
-
-# if one of the commands in a pipe fails, the entire command returns non-zero code otherwise only the return code
-# of last command would be returned regardless if some earlier commands in the pipe failed
-set -o pipefail
+me_dir=$(dirname $(readlink -f ${0%%@@*}))
+source ${me_dir}/simulation_toolkit.rc
 
 function showHelp {
 
@@ -89,12 +85,6 @@ OPTIONS
   --train_losses
                           Print training losses. Default: training loss printing disabled.
 "
-}
-
-function die {
-  err_msg="$@"
-  printf "$me: %b\n" "${err_msg}" >&2
-  exit 1
 }
 
 original_options=$@

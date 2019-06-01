@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-me=$(basename ${0%%@@*})
-full_me=${0%%@@*}
 me_dir=$(dirname $(readlink -f ${0%%@@*}))
+source ${me_dir}/simulation_toolkit.rc
 
 # if one of the commands in a pipe fails, the entire command returns non-zero code otherwise only the return code
 # of last command would be returned regardless if some earlier commands in the pipe failed
@@ -22,18 +21,6 @@ OPTIONS
                           REF is a short reference to the regression outputted by the mini_regression.sh script.
                           The format is <cluster_name>@<hash_of_log_manifest_filename>
 "
-}
-
-function die {
-  err_msg="$@"
-  printf "$me: %b\n" "${err_msg}" >&2
-  exit 1
-}
-
-function error {
-  err_msg="$@"
-  errors=$(( errors + 1 ))
-  printf "$me: ERROR: %b\n" "${err_msg}" >&2
 }
 
 while [[ "$1" == -* ]]; do

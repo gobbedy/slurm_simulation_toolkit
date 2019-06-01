@@ -105,7 +105,7 @@ do
     echo "Launching ${python_script_path} on proc ${i}. Logfile:"
     echo ${gpu_process_logfile}
     export CUDA_VISIBLE_DEVICES=0
-    echo "Python Arguments:"
+    echo "Script Arguments:"
     echo $@
     ${python_script_path} $@ &>> ${gpu_process_logfile}
 }&
