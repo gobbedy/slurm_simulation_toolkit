@@ -7,7 +7,6 @@ me=$(basename ${0%%@@*})
 full_me=${0%%@@*}
 me_dir=$(dirname $(readlink -f ${0%%@@*}))
 parent_dir=$(dirname $me_dir)
-export PATH=${me_dir}:$PATH
 datetime_suffix=$(date +%b%d_%H%M%S)
 job_script_executable="simulation.sh"
 
@@ -191,6 +190,10 @@ while [[ "$1" == * ]]; do
     ;;
   esac
 done
+
+if [[ $# -ne 0 ]]; then
+    die "ERROR: unparsed arguments $@"
+fi
 
 if (( ${num_simulations} % ${num_proc_per_gpu} )) ; then
   die "$num_simulations not divisible by $num_proc_per_gpu"

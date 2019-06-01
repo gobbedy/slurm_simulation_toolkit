@@ -195,6 +195,10 @@ while [[ "$1" == -* ]]; do
   esac
 done
 
+if [[ $# -ne 0 ]]; then
+    die "ERROR: unparsed arguments $@"
+fi
+
 if [[ -n ${split_pdf} && -n ${one_pdf} ]]; then
     die "-c and --one_pdf are incompatible."
 fi

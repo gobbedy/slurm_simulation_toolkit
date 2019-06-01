@@ -63,6 +63,10 @@ while [[ "$1" == -* ]]; do
   esac
 done
 
+if [[ $# -ne 0 ]]; then
+    die "ERROR: unparsed arguments $@"
+fi
+
 #if [[ -z ${check_epochs} ]]; then
 #  die "must provide number of epochs via --check_epochs"
 #fi

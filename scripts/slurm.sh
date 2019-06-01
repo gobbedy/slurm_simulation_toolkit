@@ -15,7 +15,7 @@ echo "NAME
      1) Runs slurm job using srun
      2) Uses CPU or GPU options defined in project.rc as SRUN_OPTIONS_CPU or SRUN_OPTIONS_GPU
 SYNOPSIS
-  $me [OPTIONS] [SCRIPT_NAME]
+  $me [OPTIONS]
 OPTIONS
   -h, --help
                           Show this description
@@ -26,8 +26,6 @@ OPTIONS
                           CPUS is the number of CPUs to be allocated to the job. Default 1.
   --cmd, --command COMMAND
                           COMMAND is the SLURM command to use: salloc, srun or sbatch. Default is salloc.
-                          If salloc, SCRIPT_NAME need not be provided.
-                          If srun or sbatch, SCRIPT_NAME must be provide.
   -e, --export EXPORT
                           EXPORT is a comma-separated list of environment variables to be passed down to the sbatch
                           script (aka SCRIPT_NAME). eg 'a=2,str=\"hello\"'
@@ -55,6 +53,10 @@ OPTIONS
                           Run slurm command in test mode. Command that *would* be run is printed
                           but job is not actually scheduled.
                           Can be used to test the launch scripts themselves.
+  --script_name SCRIPT_NAME
+                          SCRIPT_NAME is the name of sbatch script to be executed. To be safe, provide full path.
+                          If CMD is salloc, SCRIPT_NAME should not be provided.
+                          If CMD is srun or sbatch, SCRIPT_NAME must be provided.
 
   --singleton
                           If provided, only one job named JOB_NAME will run at a time by this user on this cluster. If
@@ -111,6 +113,7 @@ blocking_job_id=''
 ###################################### ARGUMENT PROCESSING AND CHECKING ################################################
 ##################################### YOU SHOULD NOT NEED TO CHANGE THIS ###############################################
 ########################################################################################################################
+script_name=''
 while [[ "$1" == -* ]]; do
   case "$1" in
     -h|--help)
@@ -174,6 +177,10 @@ while [[ "$1" == -* ]]; do
       slurm_test_mode=yes
       shift 1
     ;;
+    --script_name)
+      script_name=$2
+      shift 2
+    ;;
     --singleton)
       singleton=yes
       shift 1
@@ -197,6 +204,9 @@ while [[ "$1" == -* ]]; do
   esac
 done
 
+if [[ $# -ne 0 ]]; then
+    die "ERROR: unparsed arguments $@"
+fi
 
 ########################################################################################################################
 ########################################### BUILD SLURM OPTIONS ########################################################
@@ -215,12 +225,12 @@ if [[ -z ${output_file} ]]; then
 fi
 
 if [[ "${slurm_command}" == "salloc" ]]; then
-  if [[ $# -ne 0 ]]; then
+  if [[ -n ${script_name} ]]; then
     >&2 echo "$me: ERROR: salloc command does not require a script to be run"
     exit 1
   fi
 else
-  if [[ $# -ne 1 ]]; then
+  if [[ -z ${script_name} ]]; then
     >&2 echo "$me: ERROR: require exactly 1 script to run"
     exit 1
   fi

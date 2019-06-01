@@ -303,6 +303,10 @@ elif [[ $node_prefix == "nia" ]]; then
     mem=100G
 fi
 
+if [[ $# -ne 0 ]]; then
+    die "ERROR: unparsed arguments $@"
+fi
+
 # slurm logile where simulation output will reside
 slurm_logfile=${output_dir}/${job_name}.slurm
 
