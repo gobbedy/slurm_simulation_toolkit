@@ -2,7 +2,7 @@
 # These can be overriden from the command line
 
 # job_name will be job_basename unless '--max_jobs_in_parallel' argument is provided in mini_regression.sh
-job_basename='dat'
+job_name='dat'
 email=no
 test_mode=no
 
