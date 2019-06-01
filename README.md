@@ -8,32 +8,32 @@ By Guillaume Perrault-Archambault
 The goal of for new users to be able to clone this project, and with minimal changes, have an automated workflow for luanching, monitoring, post-processing parallel simulations.
 
 ## Currently supported clusters
-Graham
-Cedar
-Beluga
-Being Dell cluster (referred to as "Beihang" in the code)
+* Graham
+* Cedar
+* Beluga
+* Beihang Dell cluster (referred to as "Beihang" in the code)
 
 ## Run instructions
-Add the scripts directory to your path:
+Add the scripts directory to your path:  
 ```export PATH=<PATH-TO-CLONED-REPO>/scripts:$PATH```
 
 ## slurm.sh
 
 Wraps sbatch, srun, salloc SLURM commands. sbatch more heavily test.
 
-Intended to handle low-level SLURM switches and parameters that do not need to be exposed to the user.
+Handles low-level SLURM switches and parameters that do not need to be exposed to the user.
 
 Run ```slurm.sh --help``` for usage.
 
 ## simulation.sh.
 
-Wraps slurm.sh. Intended to handle static simulation parameters that do not need to be updated frequently, as well as generating a new simulation output directory for each run.
+Wraps slurm.sh. Handles static simulation parameters that do not need to be updated frequently, as well as generating a new simulation output directory for each run.
 
 Run ```simulation.sh --help``` for usage.
 
 ## mini_regression.sh
 
-Wraps simulations. Intendend to hanle launching multiple simulations in parallel.
+Wraps simulations. Handles launching multiple simulations in parallel.
 
 Run ```mini_regression.sh --help``` for usage.
 
