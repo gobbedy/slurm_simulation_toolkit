@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 me_dir=$(dirname $(readlink -f ${0%%@@*}))
 source ${me_dir}/simulation_toolkit.rc
+datetime_suffix=$(date +%b%d_%H%M%S)
 
 #######################################################################################################################
 ########################################### HELPER VARIABLES AND FUNCTIONS ############################################
@@ -153,7 +154,7 @@ fi
 ########################################################################################################################
 
 # Create regression name and regression directory name based on job name and current time
-regression_name="${job_basename}_${datetime_suffix}"
+regression_name="${job_name}_${datetime_suffix}"
 regression_summary_dir=${parent_dir}/regression_summary/${regression_name}
 
 # Create names of files that will contain summary information about regression
