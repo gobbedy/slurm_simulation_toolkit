@@ -1,0 +1,34 @@
+# Common variables and functions
+set -o pipefail
+me=$(basename ${0%%@@*})
+full_me=${0%%@@*}
+parent_dir=$(dirname ${me_dir})
+
+# Usage: info "string message"
+function info
+{
+  printf "${me}: INFO - %s\n" "$@"
+}
+
+function error {
+  err_msg="$@"
+  errors=$(( errors + 1 ))
+  printf "$me: ERROR: %b\n" "${err_msg}" >&2
+}
+
+function die {
+  err_msg="$@"
+  printf "$me: %b\n" "${err_msg}" >&2
+  exit 1
+}
+
+# ADD scripts to PATH variable
+export PATH=${me_dir}:$PATH
+
+local_cluster=$(get_local_cluster.sh)
+if [[ ${local_cluster} == "unsupported" ]]; then
+    die "ERROR: local cluster unsupported"
+fi
+
+# time, nodes, cpus, gpus, memory to request by cluster
+source ${me_dir}/default_job_params.rc

@@ -1,7 +1,6 @@
-#!/bin/bash
-me=$(basename ${0%%@@*})
-full_me=${0%%@@*}
+#!/usr/bin/env bash
 me_dir=$(dirname $(readlink -f ${0%%@@*}))
+source ${me_dir}/simulation_toolkit.rc
 
 # if one of the commands in a pipe fails, the entire command returns non-zero code otherwise only the return code
 # of last command would be returned regardless if some earlier commands in the pipe failed
@@ -18,19 +17,10 @@ SYNOPSIS
 OPTIONS
   -h, --help
                           Show this description
+  --ref REF
+                          REF is a short reference to the regression outputted by the mini_regression.sh script.
+                          The format is <cluster_name>@<hash_of_log_manifest_filename>
 "
-}
-
-function die {
-  err_msg="$@"
-  printf "$me: %b\n" "${err_msg}" >&2
-  exit 1
-}
-
-function error {
-  err_msg="$@"
-  errors=$(( errors + 1 ))
-  printf "$me: ERROR: %b\n" "${err_msg}" >&2
 }
 
 while [[ "$1" == -* ]]; do
@@ -38,6 +28,10 @@ while [[ "$1" == -* ]]; do
     -h|--help)
       showHelp
       exit 0
+    ;;
+    --ref)
+      reference=$2
+      shift 2
     ;;
 	# START CHANGES HERE
 	# END CHANGES HERE
@@ -48,26 +42,19 @@ while [[ "$1" == -* ]]; do
   esac
 done
 
-#check_epochs=''
 errors=0
 while [[ "$1" == -* ]]; do
   case "$1" in
-    #--check_epochs)
-    #  # only process first "epochs" epochs
-    #  check_epochs=$2
-    #  shift 2
-    #;;
     -*)
       die "Invalid option $1"
     ;;
   esac
 done
 
-#if [[ -z ${check_epochs} ]]; then
-#  die "must provide number of epochs via --check_epochs"
-#fi
+if [[ $# -ne 0 ]]; then
+    die "ERROR: unparsed arguments $@"
+fi
 
-reference=$1
 hash_to_find="${reference##*@}"
 
 regression_summary_dir=regression_summary
@@ -104,27 +91,49 @@ test_errors=()
 for (( i=0; i<$num_logs; i++ ));
 do
     logfile=${logfiles[$i]}
+    slurm_logfile=$(ls $(dirname $logfile)/*slurm)
+
+    batch_size=$(grep -oP -- '--batch_size \d+' $slurm_logfile | grep -oP '\d+')
+    label_dim=$(grep -oP -- '--label_dim \d+' $slurm_logfile | grep -oP '\d+')
+    lam_parameters=$(grep -oP -- '--lam_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oP '[\w\.]+ [\w\.]+$')
+    gam_parameters=$(grep -oP -- '--gamma_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oP '[\w\.]+ [\w\.]+$')
+    dat_parameters=$(grep -oP -- '--dat_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oP '[\w\.]+ [\w\.]+$')
+    dat_transform=$(grep -oP -- '--dat_transform' $slurm_logfile)
+    no_mixup=$(grep -oP -- '--no_mixup' $slurm_logfile)
+    cosine_loss=$(grep -oP -- '--cosine_loss' $slurm_logfile)
+    dat=$(grep -oP -- '--directional_adversarial' $slurm_logfile)
+    dataset=$(grep -oP -- '--dataset \w+' $slurm_logfile | grep -oP '\w+$')
+    check_epochs=$(grep -oP -- '--epoch \d+' $slurm_logfile | grep -oP '\d+')
+
     echo ${result_separator}
     echo "LOGFILE: $logfile"
     jobid=${jobid_list[$i]}
-    num_epochs=$(grep -c "Test Acc:" ${logfile})
-    job_running=`sacct -j ${jobid} -o State -n | grep RUNNING`
-    if [[ -n ${job_running} ]]; then
-        echo "Completed ${num_epochs} epochs (job ${jobid} still running)."
+
+    job_failed=`sacct -j ${jobid} -o State -n | grep FAILED`
+    if [[ -n ${job_failed} ]]; then
+        error "Job ${jobid} completed but failed. Check ${slurm_logfile}"
+        echo ${result_separator}
+        num_completed_jobs=$(( num_completed_jobs + 1 ))
+        continue
+    fi
+
+    job_pending=`sacct -j ${jobid} -o State -n | grep PENDING`
+    if [[ -n ${job_pending} ]]; then
+        echo "Job ${jobid} has not yet started."
         echo ${result_separator}
         continue
     fi
-    batch_size=$(grep -oP -- '--batch_size \d+' $logfile | grep -oP '\d+')
-    label_dim=$(grep -oP -- '--label_dim \d+' $logfile | grep -oP '\d+')
-    lam_parameters=$(grep -oP -- '--lam_parameters [\w\.]+ [\w\.]+' $logfile | grep -oP '[\w\.]+ [\w\.]+$')
-    gam_parameters=$(grep -oP -- '--gamma_parameters [\w\.]+ [\w\.]+' $logfile | grep -oP '[\w\.]+ [\w\.]+$')
-    dat_parameters=$(grep -oP -- '--dat_parameters [\w\.]+ [\w\.]+' $logfile | grep -oP '[\w\.]+ [\w\.]+$')
-    dat_transform=$(grep -oP -- '--dat_transform' $logfile)
-    no_mixup=$(grep -oP -- '--no_mixup' $logfile)
-    cosine_loss=$(grep -oP -- '--cosine_loss' $logfile)
-    dat=$(grep -oP -- '--directional_adversarial' $logfile)
-    dataset=$(grep -oP -- '--dataset \w+' $logfile | grep -oP '\w+$')
-    check_epochs=$(grep -oP -- '--epoch \d+' $logfile | grep -oP '\d+')
+
+    num_epochs=$(grep -c "Test Acc:" ${logfile})
+    job_running=`sacct -j ${jobid} -o State -n | grep RUNNING`
+    if [[ -n ${job_running} ]]; then
+        echo "Completed ${num_epochs} out of ${check_epochs} epochs (job ${jobid} still running)."
+        echo ${result_separator}
+        continue
+    fi
+
+    num_completed_jobs=$(( num_completed_jobs + 1 ))
+
     echo "EPOCHS:"
     echo $num_epochs
     if [[ ${num_epochs} -ne ${check_epochs} ]]; then
@@ -137,8 +146,6 @@ do
 
     average_test_error=$(grep -oP '(?<=Test Acc: )[^%]+' ${logfile} | head -n ${num_epochs} | tail -n 10 | awk '{print 1-$1/100}' | paste -sd+ | bc | awk '{print $1*10}')
     test_errors+=(${average_test_error})
-
-    num_completed_jobs=$(( num_completed_jobs + 1 ))
 
     echo ${result_separator}
 done
@@ -157,7 +164,7 @@ if [[ ${errors} -gt 0 ]]; then
     fi
 else
     if [[ ${num_completed_jobs} -ne ${num_logs} ]]; then
-        echo "REGRESSION IN PROGRESS: ${num_completed_jobs}/${num_logs} simulations complete."
+        echo "REGRESSION IN PROGRESS: ${num_completed_jobs}/${num_logs} simulations complete. No errors so far."
         exit 2
     else
         echo "REGRESSION SUCCEEDED: ${num_completed_jobs}/${num_logs} simulations complete."
@@ -168,7 +175,11 @@ sum_test_error=$( IFS="+"; bc <<< "${test_errors[*]}" )
 test_error_mean=$(awk "BEGIN {print ${sum_test_error}/${num_completed_jobs}; exit}")
 if [[ ${num_completed_jobs} -gt 1 ]]; then
     test_error_std_dev=$(printf '%s\n' "${test_errors[@]}"  | awk "{sumsq+=(${test_error_mean}-\$1)**2}END{print sqrt(sumsq/(NR-1))}")
+    if [[ ${test_error_std_dev} -eq 0 ]]; then
+        die "ERROR: Standard deviation is 0. Did all simulations use the same seed?"
+    fi
     std_dev_mean=$(echo "${test_error_std_dev}/sqrt(${num_processed_logs})" | bc -l)
+    echo C
 else
     std_dev_mean="N/A"
 fi

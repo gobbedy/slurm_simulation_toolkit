@@ -1,11 +1,9 @@
-#!/bin/bash
-set -o pipefail
-me=$(basename ${0%%@@*})
-full_me=${0%%@@*}
+#!/usr/bin/env bash
 me_dir=$(dirname $(readlink -f ${0%%@@*}))
+source ${me_dir}/simulation_toolkit.rc
 
 ############################################################################################################
-######### HELPER VARIABLES AND FUNCTIONS -- DO NOT CHANGE UNLESS YOU KNOW WHAT YOU'RE DOING ################
+######################################## HELPER VARIABLES AND FUNCTIONS ####################################
 ############################################################################################################
 
 function showHelp {
@@ -15,7 +13,7 @@ echo "NAME
      1) Runs slurm job using srun
      2) Uses CPU or GPU options defined in project.rc as SRUN_OPTIONS_CPU or SRUN_OPTIONS_GPU
 SYNOPSIS
-  $me [OPTIONS] [SCRIPT_NAME]
+  $me [OPTIONS]
 OPTIONS
   -h, --help
                           Show this description
@@ -26,8 +24,6 @@ OPTIONS
                           CPUS is the number of CPUs to be allocated to the job. Default 1.
   --cmd, --command COMMAND
                           COMMAND is the SLURM command to use: salloc, srun or sbatch. Default is salloc.
-                          If salloc, SCRIPT_NAME need not be provided.
-                          If srun or sbatch, SCRIPT_NAME must be provide.
   -e, --export EXPORT
                           EXPORT is a comma-separated list of environment variables to be passed down to the sbatch
                           script (aka SCRIPT_NAME). eg 'a=2,str=\"hello\"'
@@ -55,6 +51,10 @@ OPTIONS
                           Run slurm command in test mode. Command that *would* be run is printed
                           but job is not actually scheduled.
                           Can be used to test the launch scripts themselves.
+  --script_name SCRIPT_NAME
+                          SCRIPT_NAME is the name of sbatch script to be executed. To be safe, provide full path.
+                          If CMD is salloc, SCRIPT_NAME should not be provided.
+                          If CMD is srun or sbatch, SCRIPT_NAME must be provided.
 
   --singleton
                           If provided, only one job named JOB_NAME will run at a time by this user on this cluster. If
@@ -71,72 +71,38 @@ OPTIONS
 "
 }
 
-function die {
-  printf "${me}: %b\n" "$@" >&2
-  exit 1
-}
-
-# Get name of cluster we're on
-node_prefix=$(hostname | cut -c1-3)
-if [[ $node_prefix == "hel" ]]; then
-   local_cluster=helios
-elif [[ $node_prefix == "del" ]]; then
-   local_cluster=beihang
-elif [[ $node_prefix == "nia" ]]; then
-   local_cluster=niagara
-elif [[ $node_prefix == "bel" ]]; then
-   local_cluster=beluga
-elif [[ $node_prefix == "ced" ]]; then
-   local_cluster=cedar
-elif [[ $node_prefix == "gra" ]]; then
-   local_cluster=graham
-elif [[ $node_prefix == ip* ]]; then
-   local_cluster=mammouth
-else
-  echo "WARNING: local cluster unsupported"
-fi
-
 
 ########################################################################################################################
-######################## SET DEFAULT REGRESSION PARAMETERS -- CHANGE THESE OPTIONALLY ##################################
+########################################## SET DEFAULT REGRESSION PARAMETERS ###########################################
 ########################################################################################################################
-if [[ $local_cluster == "cedar" ]]; then
-    account="rrg-yymao"
-else
-    account="def-yymao"
-fi
-if [[ $local_cluster == "beihang" ]]; then
-    num_proc_per_gpu=2
-else
-    num_proc_per_gpu=1
-fi
-time="00:01:00"
-job_name=portfolio
-num_cpus=1
-num_gpus=0
-mem=256m
 slurm_command=srun
-mail='' 
-slurm_test_mode=''
-singleton=''
+singleton=no
 blocking_job_id=''
 
 ########################################################################################################################
 ###################################### ARGUMENT PROCESSING AND CHECKING ################################################
-##################################### YOU SHOULD NOT NEED TO CHANGE THIS ###############################################
 ########################################################################################################################
-while [[ "$1" == -* ]]; do
+script_name=''
+
+while [[ $# -ne 0 ]]; do
   case "$1" in
     -h|--help)
       showHelp
       exit 0
+    ;;
+    --)
+      shift 1
+      # pass all arguments following '--' to child script
+      child_args="$@"
+      shift $#
+      break
     ;;
     -a|--account)
       account=$2
       shift 2
     ;;
     -c|--num_cpus)
-      num_cpus=$2
+      cpus=$2
       shift 2
     ;;
     --cmd|--command)
@@ -148,7 +114,7 @@ while [[ "$1" == -* ]]; do
       shift 2
     ;;
     -g|--num_gpus)
-      num_gpus=$2
+      gpus=$2
       shift 2
     ;;
     -j|--job_name)
@@ -160,7 +126,7 @@ while [[ "$1" == -* ]]; do
       shift 2
     ;;
     --mail)
-      mail=yes
+      email=yes
       EMAIL=$2
       shift 2
       if [[ ${EMAIL} == -* ]]; then
@@ -188,6 +154,10 @@ while [[ "$1" == -* ]]; do
       slurm_test_mode=yes
       shift 1
     ;;
+    --script_name)
+      script_name=$2
+      shift 2
+    ;;
     --singleton)
       singleton=yes
       shift 1
@@ -211,17 +181,15 @@ while [[ "$1" == -* ]]; do
   esac
 done
 
-
 ########################################################################################################################
 ########################################### BUILD SLURM OPTIONS ########################################################
-##################################### YOU SHOULD NOT NEED TO CHANGE THIS ###############################################
 ########################################################################################################################
 
 # request the right number of nodes based on the number of CPU requested
 if [[ ${local_cluster} == "graham" ]]; then
-  num_nodes=$((( ($num_cpus-1) / 32) + 1 ))
+  num_nodes=$((( ($cpus-1) / 32) + 1 ))
 elif [[ -z ${num_nodes} ]]; then
-  num_nodes=$((( ($num_cpus-1) / 48) + 1 ))
+  num_nodes=$((( ($cpus-1) / 48) + 1 ))
 fi
 
 if [[ -z ${output_file} ]]; then
@@ -229,16 +197,15 @@ if [[ -z ${output_file} ]]; then
 fi
 
 if [[ "${slurm_command}" == "salloc" ]]; then
-  if [[ $# -ne 0 ]]; then
+  if [[ -n ${script_name} ]]; then
     >&2 echo "$me: ERROR: salloc command does not require a script to be run"
     exit 1
   fi
 else
-  if [[ $# -ne 1 ]]; then
+  if [[ -z ${script_name} ]]; then
     >&2 echo "$me: ERROR: require exactly 1 script to run"
     exit 1
   fi
-  script_name=$1
 fi
 
 slurm_options="--time=${time} --job-name=${job_name} --nodes=${num_nodes}"
@@ -248,30 +215,30 @@ if [[ ${local_cluster} != "beihang" ]]; then
     slurm_options+=" --account=${account}"
 fi
 
-if [[ -n ${mail} ]]; then
+if [[ ${email} == "yes" ]]; then
   slurm_options+=" --mail-type=END --mail-user=${EMAIL} --signal=USR1@5"
   export+=",mail=yes"
 fi
 
-if [[ -n ${slurm_test_mode} ]]; then 
+if [[ ${slurm_test_mode} == "yes" ]]; then
   slurm_options+=" --test-only"
 fi
 
-if [[ -n ${singleton} ]]; then
+if [[ ${singleton} == "yes" ]]; then
   slurm_options+=" --dependency=singleton"
 fi
 
 if [[ ${local_cluster} == "niagara" ]]; then
-    slurm_options+=" --ntasks=${num_cpus}"
+    slurm_options+=" --ntasks=${cpus}"
 else
-    if [[ ${num_cpus} -gt 0 ]]; then
-      slurm_options+=" --ntasks=${num_cpus}"
+    if [[ ${cpus} -gt 0 ]]; then
+      slurm_options+=" --ntasks=${cpus}"
     fi
     slurm_options+=" --mem=${mem}"
 fi
 
-if [[ ${num_gpus} -gt 0 ]]; then
-  slurm_options+=" --gres=gpu:${num_gpus}"
+if [[ ${gpus} -gt 0 ]]; then
+  slurm_options+=" --gres=gpu:${gpus}"
   export+=",num_proc_per_gpu=${num_proc_per_gpu}"
 fi
 
@@ -279,17 +246,14 @@ if [[ -n ${blocking_job_id} ]]; then
   slurm_options+=" --dependency=afterany:${blocking_job_id}"
 fi
 
-
-
 ########################################################################################################################
 ############################################# LAUNCH SLURM COMMAND #####################################################
-##################################### YOU SHOULD NOT NEED TO CHANGE THIS ###############################################
 ########################################################################################################################
 
 if [[ ${slurm_command} == "salloc" ]]; then
   slurm_run_command="${slurm_command} ${slurm_options}"
 else
-  slurm_run_command="${slurm_command} ${slurm_options} --export=${export} ${script_name}"
+  slurm_run_command="${slurm_command} ${slurm_options} --export=${export} ${script_name} ${child_args}"
 fi
 
 echo "${me}: SUBMITTING THE FOLLOWING SLURM COMMAND on `date`:"

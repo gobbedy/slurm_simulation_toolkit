@@ -1,10 +1,6 @@
-#!/bin/bash
-me=$(basename ${0%%@@*})
-full_me=${0%%@@*}
-
-# if one of the commands in a pipe fails, the entire command returns non-zero code otherwise only the return code
-# of last command would be returned regardless if some earlier commands in the pipe failed
-set -o pipefail
+#!/usr/bin/env bash
+me_dir=$(dirname $(readlink -f ${0%%@@*}))
+source ${me_dir}/simulation_toolkit.rc
 
 function showHelp {
 
@@ -89,12 +85,6 @@ OPTIONS
   --train_losses
                           Print training losses. Default: training loss printing disabled.
 "
-}
-
-function die {
-  err_msg="$@"
-  printf "$me: %b\n" "${err_msg}" >&2
-  exit 1
 }
 
 original_options=$@
@@ -195,6 +185,10 @@ while [[ "$1" == -* ]]; do
   esac
 done
 
+if [[ $# -ne 0 ]]; then
+    die "ERROR: unparsed arguments $@"
+fi
+
 if [[ -n ${split_pdf} && -n ${one_pdf} ]]; then
     die "-c and --one_pdf are incompatible."
 fi
@@ -203,26 +197,16 @@ fi
 sed_exclude_option=`printf '%sd;' "${exclude_list[@]}"`
 
 ################## SETUP REMOTE LOGIN ####################
-node_prefix=$(hostname | cut -c1-3)
-if [[ $node_prefix == "hel" ]]; then
-   local_cluster=helios
-elif [[ $node_prefix == "nia" ]]; then
-   local_cluster=niagara
-elif [[ $node_prefix == "bel" ]]; then
-   local_cluster=beluga
+local_cluster=$(get_local_cluster.sh)
+if [[ ${local_cluster} == "unsupported" ]]; then
+    die "ERROR: local cluster unsupported"
+fi
+
+if [[ ${local_cluster} == "unsupported" ]]; then
    # beluga doesn't support mailing, so need to use cedar
    ssh_mail_node="gobbedy@cedar.computecanada.ca"
    ssh $ssh_mail_node "bash -s" -- < $full_me $original_options
    exit
-elif [[ $node_prefix == "ced" ]]; then
-   local_cluster=cedar
-elif [[ $node_prefix == "del" ]]; then
-   local_cluster=beihang
-elif [[ $node_prefix == "gra" ]]; then
-   local_cluster=graham
-else
-   echo "ERROR: local cluster prefix \"${node_prefix}\" unrecognized"
-   exit 1
 fi
 
 if [[ -n ${cluster} ]]; then

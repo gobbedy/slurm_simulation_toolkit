@@ -1,9 +1,4 @@
-#!/bin/bash
-
-######################################################################
-# THE ONLY PART YOU REALLY NEED IS AT THE VERY END!!
-######################################################################
-
+#!/usr/bin/env bash
 set -o pipefail
 me=$(basename ${0%%@@*})
 full_me=${0%%@@*}
@@ -96,7 +91,7 @@ trap 'cleanupOnExit "EXIT"' EXIT
 
 
 ######################################################################
-# Launch pythons simulation -- THE ONLY PART YOU REALLY NEED!!
+# Launch pythons simulation
 ######################################################################
 job_name=$SLURM_JOB_NAME
 slurm_logfile=$output_dir/${job_name}.slurm
@@ -110,7 +105,9 @@ do
     echo "Launching ${python_script_path} on proc ${i}. Logfile:"
     echo ${gpu_process_logfile}
     export CUDA_VISIBLE_DEVICES=0
-    ${python_script_path} ${python_options} &>> ${gpu_process_logfile}
+    echo "Script Arguments:"
+    echo $@
+    ${python_script_path} $@ &>> ${gpu_process_logfile}
 }&
 done
 wait
