@@ -162,6 +162,7 @@ regression_logname_file=${regression_summary_dir}/log_manifest.txt
 regression_slurm_logname_file=${regression_summary_dir}/slurm_log_manifest.txt
 regression_job_numbers_file=${regression_summary_dir}/job_manifest.txt
 regression_slurm_commands_file=${regression_summary_dir}/slurm_commands.txt
+hash_reference_file=${regression_summary_dir}/hash_reference.txt
 
 # create regression dir if doesn't exist
 mkdir -p ${regression_summary_dir}
@@ -231,6 +232,8 @@ echo "${input_command}" > ${regression_command_file}
 hash=$(echo -n `readlink -f $regression_logname_file` | sha1sum | grep -oP '^\w{8}')
 reference="${local_cluster}@${hash}"
 
+echo "${reference}" > ${hash_reference file}
+
 echo ""
 
 echo "JOB NUMBERS CONTAINED IN:"
@@ -252,6 +255,9 @@ echo ""
 echo "REGRESSION COMMAND CONTAINED IN:"
 readlink -f ${regression_command_file}
 echo ""
+
+echo "HASH REFERENCE FILE:"
+echo $hash_reference_file
 
 echo "HASH REFERENCE:"
 echo $reference

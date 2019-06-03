@@ -7,7 +7,7 @@ By Guillaume Perrault-Archambault
 
 This toolkit provides an automated workflow for launching batches of jobs (```mini_regression.sh```, ```simulation.sh```, ```slurm.sh```, ```simulation.sbatch```), monitoring these regressions (```regression_status.sh```), and post-process regressions (```process_results.sh```).
 
-The toolkit is designed to work 'as is' without modification by the user. That said, is designed in a modular way, such that cluster-specific configurations can be overridden (by supplying your own ```SLURM_SIMULATION_TOOLKIT_CLUSTER_CONFIG_RC```) if the user wishes to add support for a new/unsupported cluster.
+The toolkit is designed to work 'as is' without modification by the user. That said, it is designed in a modular way, such that cluster-specific configurations can be overridden (by supplying your own ```SLURM_SIMULATION_TOOLKIT_CLUSTER_CONFIG_RC```) if the user wishes to add support for a new/unsupported cluster.
 
 ## Currently supported clusters
 * Graham
@@ -82,13 +82,13 @@ Run ```slurm.sh --help``` for usage.
 
 ### simulation.sh
 
-Wraps ```slurm.sh```. Handles static simulation parameters that do not need to be updated frequently, as well as generating a new simulation output directory for each run.
+Wraps ```slurm.sh```. Handles generating simulation output directory and copying source code to the output directory. The simulation will be run from within the output directory.
 
 Run ```simulation.sh --help``` for usage.
 
 ### mini_regression.sh
 
-Wraps ```simulation.sh```. Handles launching multiple simulations in parallel.
+Wraps ```simulation.sh```. Handles launching multiple simulations in parallel. Will generate a regression summary directory contain job ID manifest, logfile manifest, slurm logfile manifest, slurm commands, regression command, and hash reference.
 
 Run ```mini_regression.sh --help``` for usage.
 
