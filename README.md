@@ -1,11 +1,11 @@
 Work in progress. This introduction is not complete and the code is not ready to be used.
 
-# compute_canada_template_project
+# slurm_simulation_toolkit
 By Guillaume Perrault-Archambault
 
 ## Introduction
 
-The goal of for new users to be able to clone this project, and with minimal changes, have an automated workflow for luanching, monitoring, post-processing parallel simulations.
+The goal is for users to get an automated workflow for launching batches jobs (```mini_regression.sh```, ```simulation.sh```, ```slurm.sh```, ```simulation.sbatch```), monitoring these regressions (```regression_status.sh```), and post-process regressions (```process_results.sh```).
 
 ## Currently supported clusters
 * Graham
@@ -13,7 +13,7 @@ The goal of for new users to be able to clone this project, and with minimal cha
 * Beluga
 * Beihang Dell cluster (referred to as "Beihang" in the code)
 
-## Run instructions
+## Install instructions
 Add the scripts directory to your path:  
 ```export PATH=<PATH-TO-CLONED-REPO>/scripts:$PATH```
 
