@@ -42,6 +42,8 @@ Then simply run:
 
 The above assumes that your base script (located wherever ```SLURM_SIMULATION_BASE_SCRIPT``` points to) accepts a ```--epochs <NUM_EPOCHS>``` option and a ```--batch_size <BATCH_SIZE>``` option.
 
+Note that toolkit parameters (here ```--num_simulations 12```) are separated from base script parameters (here ```--epochs 200 --batch_size 128```) with ```--```.
+
 Run ```mini_regression.sh --help``` for more details on usage.
 
 ## Description of each script
