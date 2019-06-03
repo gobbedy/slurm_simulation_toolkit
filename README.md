@@ -16,7 +16,7 @@ The toolkit is designed to work 'as is' without modification by the user. That s
 * Beihang Dell cluster (referred to as "Beihang" in the code)
 
 ## Install instructions
-```git clone https://github.com/SITE5039/slurm_simulation_toolkit <PATH_TO_TOOLKIT>```
+```git clone https://github.com/gobbedy/slurm_simulation_toolkit <PATH_TO_TOOLKIT>```
 
 Set and export the following environment variables:
 ```
