@@ -80,7 +80,7 @@ Handles low-level SLURM switches and parameters that do not need to be exposed t
 
 Run ```slurm.sh --help``` for usage.
 
-### simulation.sh.
+### simulation.sh
 
 Wraps ```slurm.sh```. Handles static simulation parameters that do not need to be updated frequently, as well as generating a new simulation output directory for each run.
 
