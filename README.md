@@ -29,12 +29,12 @@ SLURM_SIMULATION_TOOLKIT_CLUSTER_CONFIG_RC
 
 You may do so by sourcing an rc file in your shell.
 
-An example rc file can be found here: <PATH_TO_TOOLKIT>/user_template.rc
+An example rc file can be found here: ```<PATH_TO_TOOLKIT>/user_template.rc```
 
-You may copy <PATH_TO_TOOLKIT>/user_template.rc to any desired location <PATH_TO_RC> and modify user_template.rc as desired.
+You may copy ```<PATH_TO_TOOLKIT>/user_template.rc``` to any desired location ```<PATH_TO_RC>``` and modify ```user_template.rc``` as desired.
 
 Then simply run:
-source <PATH_TO_RC>
+```source <PATH_TO_RC>```
 
 ## Example: Running 12 jobs in parallel
 
