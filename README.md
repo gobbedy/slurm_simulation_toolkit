@@ -5,7 +5,7 @@ By Guillaume Perrault-Archambault
 
 ## Introduction
 
-The toolkit provides an automated workflow for launching batches of jobs (```mini_regression.sh```, ```simulation.sh```, ```slurm.sh```, ```simulation.sbatch```), monitoring these regressions (```regression_status.sh```), and post-process regressions (```process_results.sh```).
+This toolkit provides an automated workflow for launching batches of jobs (```mini_regression.sh```, ```simulation.sh```, ```slurm.sh```, ```simulation.sbatch```), monitoring these regressions (```regression_status.sh```), and post-process regressions (```process_results.sh```).
 
 The toolkit is designed to work 'as is' without modification by the user. That said, is designed in a modular way, such that cluster-specific configurations can be overridden (by supplying your own ```SLURM_SIMULATION_TOOLKIT_CLUSTER_CONFIG_RC```) if the user wishes to add support for a new/unsupported cluster.
 
