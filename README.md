@@ -44,6 +44,31 @@ The above assumes that your base script (located wherever ```SLURM_SIMULATION_BA
 
 Note that toolkit parameters (here ```--num_simulations 12```) are separated from base script parameters (here ```--epochs 200 --batch_size 128```) with ```--```.
 
+Sample output:
+```
+RUNNING:
+mini_regression.sh --num_simulations 12 -- --epoch 200 --batch_size 128
+
+
+JOB NUMBERS CONTAINED IN:
+/lustre04/scratch/gobbedy/regress/regression_summary/dat_Jun03_011655/job_manifest.txt
+
+SLURM LOGFILE NAMES CONTAINED IN:
+/lustre04/scratch/gobbedy/regress/regression_summary/dat_Jun03_011655/slurm_log_manifest.txt
+
+LOGFILE NAMES CONTAINED IN:
+/lustre04/scratch/gobbedy/regress/regression_summary/dat_Jun03_011655/log_manifest.txt
+
+SLURM COMMANDS CONTAINED IN:
+/lustre04/scratch/gobbedy/regress/regression_summary/dat_Jun03_011655/slurm_commands.txt
+
+REGRESSION COMMAND CONTAINED IN:
+/lustre04/scratch/gobbedy/regress/regression_summary/dat_Jun03_011655/regression_command.txt
+
+HASH REFERENCE:
+beluga@9a6b4a77
+```
+
 Run ```mini_regression.sh --help``` for more details on usage.
 
 ## Description of each script
