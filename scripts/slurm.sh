@@ -11,7 +11,7 @@ echo "NAME
      1) Runs slurm job using srun
      2) Uses CPU or GPU options defined in project.rc as SRUN_OPTIONS_CPU or SRUN_OPTIONS_GPU
 SYNOPSIS
-  $me [OPTIONS]
+  $me [OPTIONS] [-- OPTIONS_FOR_BASE_SCRIPT]
 OPTIONS
   -h, --help
                           Show this description

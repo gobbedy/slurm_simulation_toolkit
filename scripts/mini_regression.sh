@@ -16,7 +16,7 @@ echo "NAME
      2) Wraps simulation.sh script
 
 SYNOPSIS
-  $me [OPTIONS]
+  $me [OPTIONS] [-- OPTIONS_FOR_BASE_SCRIPT]
 
 OPTIONS
   -h, --help
