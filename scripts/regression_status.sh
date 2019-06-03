@@ -1,10 +1,5 @@
 #!/usr/bin/env bash
-me_dir=$(dirname $(readlink -f ${0%%@@*}))
-source ${me_dir}/simulation_toolkit.rc
-
-# if one of the commands in a pipe fails, the entire command returns non-zero code otherwise only the return code
-# of last command would be returned regardless if some earlier commands in the pipe failed
-set -o pipefail
+source ${SLURM_SIMULATION_TOOLKIT_RC}
 
 function showHelp {
 
@@ -33,8 +28,6 @@ while [[ "$1" == -* ]]; do
       reference=$2
       shift 2
     ;;
-	# START CHANGES HERE
-	# END CHANGES HERE
     -*)
       echo "Invalid option $1"
       exit 1
@@ -57,7 +50,7 @@ fi
 
 hash_to_find="${reference##*@}"
 
-regression_summary_dir=regression_summary
+regression_summary_dir=${SLURM_SIMULATION_REGRESS_DIR}/regression_summary
 local_regressions_filename_list=(`readlink -f ${regression_summary_dir}/*/log_manifest.txt`)
 declare -A local_regressions_filename_hashlist
 for local_regressions_filename in "${local_regressions_filename_list[@]}"
@@ -67,7 +60,6 @@ do
     #echo $hash
     local_regressions_filename_hashlist[$hash]=$local_regressions_filename
 done
-
 log_manifest=${local_regressions_filename_hashlist[${hash_to_find}]}
 regression_summary_dirname=$(dirname ${log_manifest})
 job_manifest="${regression_summary_dirname}/job_manifest.txt"
@@ -93,20 +85,30 @@ do
     logfile=${logfiles[$i]}
     slurm_logfile=$(ls $(dirname $logfile)/*slurm)
 
-    batch_size=$(grep -oP -- '--batch_size \d+' $slurm_logfile | grep -oP '\d+')
-    label_dim=$(grep -oP -- '--label_dim \d+' $slurm_logfile | grep -oP '\d+')
-    lam_parameters=$(grep -oP -- '--lam_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oP '[\w\.]+ [\w\.]+$')
-    gam_parameters=$(grep -oP -- '--gamma_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oP '[\w\.]+ [\w\.]+$')
-    dat_parameters=$(grep -oP -- '--dat_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oP '[\w\.]+ [\w\.]+$')
-    dat_transform=$(grep -oP -- '--dat_transform' $slurm_logfile)
-    no_mixup=$(grep -oP -- '--no_mixup' $slurm_logfile)
-    cosine_loss=$(grep -oP -- '--cosine_loss' $slurm_logfile)
-    dat=$(grep -oP -- '--directional_adversarial' $slurm_logfile)
-    dataset=$(grep -oP -- '--dataset \w+' $slurm_logfile | grep -oP '\w+$')
-    check_epochs=$(grep -oP -- '--epoch \d+' $slurm_logfile | grep -oP '\d+')
+    batch_size=$(grep -oPm 1 -- '--batch_size \d+' $slurm_logfile | grep -oZP '\d+')
+    label_dim=$(grep -oPm 1 -- '--label_dim \d+' $slurm_logfile | grep -oZP '\d+')
+    lam_parameters=$(grep -oPm 1 -- '--lam_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oZP '[\w\.]+ [\w\.]+$')
+    gam_parameters=$(grep -oPm 1 -- '--gamma_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oZP '[\w\.]+ [\w\.]+$')
+    dat_parameters=$(grep -oPm 1 -- '--dat_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oZP '[\w\.]+ [\w\.]+$')
+    dat_transform=$(grep -oZPm 1 -- '--dat_transform' $slurm_logfile)
+    no_mixup=$(grep -oZPm 1 -- '--no_mixup' $slurm_logfile)
+    cosine_loss=$(grep -oPm 1 -- '--cosine_loss' $slurm_logfile)
+    dat=$(grep -oZPm 1 -- '--directional_adversarial' $slurm_logfile)
+    dataset=$(grep -oPm 1 -- '--dataset \w+' $slurm_logfile | grep -oZP '\w+$')
+    check_epochs=$(grep -oPm 1 -- '--epoch \d+' $slurm_logfile | grep -oZP '\d+')
+    num_cpus=$(grep -oPm 1 -- '--ntasks=\d+' $slurm_logfile | grep -oZP '\d+')
 
     echo ${result_separator}
     echo "LOGFILE: $logfile"
+
+    sbatch_command_error=`grep 'sbatch: error' ${slurm_logfile}`
+    if [[ -n ${sbatch_command_error} ]]; then
+        error "sbatch command failed. Check ${slurm_logfile}"
+        echo ${result_separator}
+        num_completed_jobs=$(( num_completed_jobs + 1 ))
+        continue
+    fi
+
     jobid=${jobid_list[$i]}
 
     job_failed=`sacct -j ${jobid} -o State -n | grep FAILED`
@@ -142,6 +144,9 @@ do
       continue
     else
         echo "Job ${jobid} completed successfully."
+        simulation_seconds=$(grep "Simulation Duration" ${logfile} | grep -oP '[\d:]+$' | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }')
+        echo "Used ${num_cpus}"
+        echo "Duration ${simulation_seconds} seconds"
     fi
 
     average_test_error=$(grep -oP '(?<=Test Acc: )[^%]+' ${logfile} | head -n ${num_epochs} | tail -n 10 | awk '{print 1-$1/100}' | paste -sd+ | bc | awk '{print $1*10}')
@@ -175,7 +180,7 @@ sum_test_error=$( IFS="+"; bc <<< "${test_errors[*]}" )
 test_error_mean=$(awk "BEGIN {print ${sum_test_error}/${num_completed_jobs}; exit}")
 if [[ ${num_completed_jobs} -gt 1 ]]; then
     test_error_std_dev=$(printf '%s\n' "${test_errors[@]}"  | awk "{sumsq+=(${test_error_mean}-\$1)**2}END{print sqrt(sumsq/(NR-1))}")
-    if [[ ${test_error_std_dev} -eq 0 ]]; then
+    if [[ "${test_error_std_dev}" == 0 ]]; then
         die "ERROR: Standard deviation is 0. Did all simulations use the same seed?"
     fi
     std_dev_mean=$(echo "${test_error_std_dev}/sqrt(${num_processed_logs})" | bc -l)

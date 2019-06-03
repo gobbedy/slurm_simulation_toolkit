@@ -1,58 +1,5 @@
 #!/usr/bin/env bash
-set -o pipefail
-me=$(basename ${0%%@@*})
-full_me=${0%%@@*}
-me_dir=$(dirname $(readlink -f ${0%%@@*}))
-
-
-
-######################################################################
-# Convenience functions
-######################################################################
-### exit elegantly
-function die {
-  err_msg="$@"
-  printf "$me: %b\n" "${err_msg}" >&2
-  exit 1
-}
-
-# Usage: info "string message"
-function info
-{
-  printf "${me}: INFO - %s\n" "$@"
-}
-
-######################################################################
-# Get node prefix, node suffix and login node
-######################################################################
-
-# get node prefix (eg gra, cdr, nia)
-node_prefix=$(echo ${SLURM_JOB_NODELIST} | cut -c1-3)
-
-# get node suffix for python, and login node
-# eg in python cedar nodes are "cdr1132.int.cedar.computecanada.ca" instead of "cdr1132"
-case "$node_prefix" in
-  gra)
-    cluster="graham"
-    login_node="gra-login1"
-  ;;
-  cdr)
-    cluster="cedar"
-    login_node="cedar5"
-  ;;
-  blg)
-    cluster="beluga"
-    login_node="beluga3"
-  ;;
-  nia)
-    cluster="niagara"
-    login_node="nia-login06"
-  ;;
-  del)
-    cluster="beihang"
-    login_node="dell-mgt-01"
-  ;;
-esac
+source ${SLURM_SIMULATION_TOOLKIT_RC}
 
 ######################################################################
 # Setup cleanup routine to trap on any exit condition (even normal)
@@ -102,12 +49,12 @@ do
 {
     gpu_process_logfile=$output_dir/${job_name}_proc_${i}.log
     cp ${slurm_logfile} ${gpu_process_logfile}
-    echo "Launching ${python_script_path} on proc ${i}. Logfile:"
+    echo "Launching ${script_path} on proc ${i}. Logfile:"
     echo ${gpu_process_logfile}
     export CUDA_VISIBLE_DEVICES=0
     echo "Script Arguments:"
     echo $@
-    ${python_script_path} $@ &>> ${gpu_process_logfile}
+    ${script_path} $@ &>> ${gpu_process_logfile}
 }&
 done
 wait

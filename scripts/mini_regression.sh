@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-me_dir=$(dirname $(readlink -f ${0%%@@*}))
-source ${me_dir}/simulation_toolkit.rc
+source ${SLURM_SIMULATION_TOOLKIT_RC}
 datetime_suffix=$(date +%b%d_%H%M%S)
 
 #######################################################################################################################
@@ -155,12 +154,14 @@ fi
 
 # Create regression name and regression directory name based on job name and current time
 regression_name="${job_name}_${datetime_suffix}"
-regression_summary_dir=${parent_dir}/regression_summary/${regression_name}
+regression_summary_dir=${SLURM_SIMULATION_REGRESS_DIR}/regression_summary/${regression_name}
 
 # Create names of files that will contain summary information about regression
 regression_command_file=${regression_summary_dir}/regression_command.txt
 regression_logname_file=${regression_summary_dir}/log_manifest.txt
+regression_slurm_logname_file=${regression_summary_dir}/slurm_log_manifest.txt
 regression_job_numbers_file=${regression_summary_dir}/job_manifest.txt
+regression_slurm_commands_file=${regression_summary_dir}/slurm_commands.txt
 
 # create regression dir if doesn't exist
 mkdir -p ${regression_summary_dir}
@@ -176,7 +177,7 @@ job_script_options="--account ${account} --time ${time} --num_proc_per_gpu ${num
 ########################################################################################################################
 for (( i=0; i<$num_jobs; i++ ));
 do
-
+{
    job_unique_options=''
    if [[ "${#blocking_jobs[@]}" -gt 0 ]]; then
      job_unique_options+=" --wait_for_job ${blocking_jobs[$i]}"
@@ -192,12 +193,10 @@ do
    fi
 
    job_unique_options+=" --job_name ${individual_job_name}"
-
-   ${simulation_executable} ${job_script_options} ${job_unique_options} -- ${child_args}  |tee ~/tmp_output.log
-
-   slurm_logfile=$(grep -oP '(?<=--output=)[^ ]+' ~/tmp_output.log)
-   job_number=$(grep "Submitted" ~/tmp_output.log | grep -oP '\d+$')
-   rm ~/tmp_output.log
+   ${simulation_executable} ${job_script_options} ${job_unique_options} -- ${child_args} > ${regression_slurm_commands_file}_${i}
+   slurm_logfile=$(grep -oP '(?<=--output=)[^ ]+' ${regression_slurm_commands_file}_${i})
+   echo ${slurm_logfile} > ${regression_slurm_logname_file}_${i}
+   job_number=$(grep "Submitted" ${regression_slurm_commands_file}_${i} | grep -oP '\d+$')
 
    for (( j=0; j<$num_proc_per_gpu; j++ )); do
       slurm_logdirname=$(dirname $slurm_logfile)
@@ -205,11 +204,21 @@ do
       gpu_number=${j}
       log_basename="${slurm_logbasename%.*}_proc_${gpu_number}.log"
       logfile=$slurm_logdirname/${log_basename}
-      echo ${logfile} >> ${regression_logname_file}
+      echo ${logfile} >> ${regression_logname_file}_${i}
    done
 
-   echo ${job_number} >> ${regression_job_numbers_file}
+   echo ${job_number} > ${regression_job_numbers_file}_${i}
+}&
 done
+wait
+
+cat ${regression_slurm_logname_file}_* > ${regression_slurm_logname_file}
+cat ${regression_logname_file}_* > ${regression_logname_file}
+cat ${regression_job_numbers_file}_* > ${regression_job_numbers_file}
+cat ${regression_slurm_commands_file}_* > ${regression_slurm_commands_file}
+rm ${regression_slurm_logname_file}_* ${regression_logname_file}_*
+rm ${regression_job_numbers_file}_* ${regression_slurm_commands_file}_*
+
 
 ########################################################################################################################
 #################################### PRINT LOCATION OF SUMMARY FILES TO USER ###########################################
@@ -228,8 +237,16 @@ echo "JOB NUMBERS CONTAINED IN:"
 readlink -f ${regression_job_numbers_file}
 echo ""
 
+echo "SLURM LOGFILE NAMES CONTAINED IN:"
+readlink -f ${regression_slurm_logname_file}
+echo ""
+
 echo "LOGFILE NAMES CONTAINED IN:"
 readlink -f ${regression_logname_file}
+echo ""
+
+echo "SLURM COMMANDS CONTAINED IN:"
+readlink -f ${regression_slurm_commands_file}
 echo ""
 
 echo "REGRESSION COMMAND CONTAINED IN:"

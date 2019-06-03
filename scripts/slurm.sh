@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-me_dir=$(dirname $(readlink -f ${0%%@@*}))
-source ${me_dir}/simulation_toolkit.rc
-
+source ${SLURM_SIMULATION_TOOLKIT_RC}
 ############################################################################################################
 ######################################## HELPER VARIABLES AND FUNCTIONS ####################################
 ############################################################################################################
@@ -17,24 +15,33 @@ SYNOPSIS
 OPTIONS
   -h, --help
                           Show this description
+
   --account ACCOUNT
                           ACCOUNT is the slurm account to use for every job (def-yymao or rrg-yymao).
                           Default is rrg-mao on Cedar, def-yymao otherwise.
+
   -c, --num_cpus CPUS
                           CPUS is the number of CPUs to be allocated to the job. Default 1.
+
   --cmd, --command COMMAND
                           COMMAND is the SLURM command to use: salloc, srun or sbatch. Default is salloc.
+
   -e, --export EXPORT
                           EXPORT is a comma-separated list of environment variables to be passed down to the sbatch
                           script (aka SCRIPT_NAME). eg 'a=2,str=\"hello\"'
+
   -g, --num_gpus NUM_GPUS
                           NUM_GPUS is the of GPUs to be allocated to the job. Default 0.
+
   -j, --job_name JOB_NAME
                           JOB_NAME is the name of job to be displayed in SLURM queue.
+
   -m, --mem MEM
                           MEM is the amount of memory (eg 500m, 7g) to request. Default 256m.
+
   --mail EMAIL
                           Send user e-mail when job ends. Sends e-mail to EMAIL
+
   -n, --nodes NODES
                           NODES is the number of compute nodes to request.
 
@@ -45,12 +52,15 @@ OPTIONS
                           is 3, then 3 instances of 'train.py --epochs 200' will be launched in parallel on the GPU.
 
                           Default is 2 (process per resource) on Beihang cluster, 1 otherwise.
+
   --output LOGFILE
                           Logfile is the SLURM output filename.
+
   -s, --test
                           Run slurm command in test mode. Command that *would* be run is printed
                           but job is not actually scheduled.
                           Can be used to test the launch scripts themselves.
+
   --script_name SCRIPT_NAME
                           SCRIPT_NAME is the name of sbatch script to be executed. To be safe, provide full path.
                           If CMD is salloc, SCRIPT_NAME should not be provided.
@@ -71,7 +81,6 @@ OPTIONS
 "
 }
 
-
 ########################################################################################################################
 ########################################## SET DEFAULT REGRESSION PARAMETERS ###########################################
 ########################################################################################################################
@@ -83,7 +92,6 @@ blocking_job_id=''
 ###################################### ARGUMENT PROCESSING AND CHECKING ################################################
 ########################################################################################################################
 script_name=''
-
 while [[ $# -ne 0 ]]; do
   case "$1" in
     -h|--help)

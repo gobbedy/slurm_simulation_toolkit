@@ -21,7 +21,6 @@ else
     num_proc_per_gpu=1
 fi
 time="0-4:00:00"
-
 gpus=1
 if [[ ${local_cluster} == "mammouth" ]]; then
     # mammouth
