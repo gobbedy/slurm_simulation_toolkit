@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-source ${SLURM_SIMULATION_TOOLKIT_RC}
+source ${SLURM_SIMULATION_TOOLKIT_HOME}/config/simulation_toolkit.rc
 datetime_suffix=$(date +%b%d_%H%M%S)
 
 #######################################################################################################################
@@ -46,6 +46,21 @@ OPTIONS
                           Makes use of the '--dependency=singleton' option of sbatch.
 
                           Default is no maximum.
+
+  --mail EMAIL
+                          Send user e-mail when job ends. Sends e-mail to EMAIL
+
+  --mem MEM
+                          MEM is the amount of memory (eg 500m, 7g) to request.
+
+  --nodes NODES
+                          NODES is the number of compute nodes to request.
+
+  --num_cpus CPUS
+                          CPUS is the number of CPUs to be allocated to the job.
+
+  --num_gpus NUM_GPUS
+                          NUM_GPUS is the number of GPUs to be allocated to the job.
 
   --num_proc_per_gpu PROCS
                           PROCS is the number of processes, aka simulations, to run on the requested compute resource.
@@ -112,8 +127,37 @@ while [[ $# -ne 0 ]]; do
       job_name=$2
       shift 2
     ;;
+    --mail)
+      email=yes
+      EMAIL=$2
+      shift 2
+      if [[ ${EMAIL} == -* ]]; then
+          echo "ERROR: invalid email: ${EMAIL}"
+          exit 1
+      fi
+      if [[ ${EMAIL} != *@* ]]; then
+          echo "ERROR: invalid email: ${EMAIL}"
+          exit 1
+      fi
+    ;;
     --max_jobs_in_parallel)
       max_jobs_in_parallel=$2
+      shift 2
+    ;;
+    --mem)
+      mem=$2
+      shift 2
+    ;;
+    --nodes)
+      nodes=$2
+      shift 2
+    ;;
+    --num_cpus)
+      cpus=$2
+      shift 2
+    ;;
+    --num_gpus)
+      gpus=$2
       shift 2
     ;;
     --num_proc_per_gpu)
@@ -154,7 +198,7 @@ fi
 
 # Create regression name and regression directory name based on job name and current time
 regression_name="${job_name}_${datetime_suffix}"
-regression_summary_dir=${SLURM_SIMULATION_REGRESS_DIR}/regression_summary/${regression_name}
+regression_summary_dir=${SLURM_SIMULATION_TOOLKIT_REGRESS_DIR}/regression_summary/${regression_name}
 
 # Create names of files that will contain summary information about regression
 regression_command_file=${regression_summary_dir}/regression_command.txt
@@ -162,6 +206,8 @@ regression_logname_file=${regression_summary_dir}/log_manifest.txt
 regression_slurm_logname_file=${regression_summary_dir}/slurm_log_manifest.txt
 regression_job_numbers_file=${regression_summary_dir}/job_manifest.txt
 regression_slurm_commands_file=${regression_summary_dir}/slurm_commands.txt
+hash_reference_file=${regression_summary_dir}/hash_reference.txt
+regression_cancellation_executable=${regression_summary_dir}/cancel_regression.sh
 
 # create regression dir if doesn't exist
 mkdir -p ${regression_summary_dir}
@@ -175,6 +221,13 @@ job_script_options="--account ${account} --time ${time} --num_proc_per_gpu ${num
 ########################################################################################################################
 ################################################ LAUNCH THE JOBS #######################################################
 ########################################################################################################################
+
+
+if [[ -n ${max_jobs_in_parallel} ]]; then
+    touch ${regression_summary_dir}/singleton_id.txt
+    last_singleton_id=$(cat ${regression_summary_dir}/singleton_id.txt)
+fi
+
 for (( i=0; i<$num_jobs; i++ ));
 do
 {
@@ -185,15 +238,14 @@ do
 
    individual_job_name=$job_name
    if [[ -n ${max_jobs_in_parallel} ]]; then
-        last_singleton_id=`cat ${regression_summary_dir}/singleton_id.txt`
-        singleton_id=$(((last_singleton_id+1) % ${max_jobs_in_parallel}))
-        echo ${singleton_id} > ${regression_summary_dir}/singleton_id.txt
-        individual_job_name+="_${singleton_id}"
-        job_unique_options+=' --singleton'
+       singleton_id=$(((last_singleton_id+$i) % ${max_jobs_in_parallel}))
+       individual_job_name+="_${singleton_id}"
+       job_unique_options+=' --singleton'
    fi
 
    job_unique_options+=" --job_name ${individual_job_name}"
-   ${simulation_executable} ${job_script_options} ${job_unique_options} -- ${child_args} > ${regression_slurm_commands_file}_${i}
+   ${simulation_executable} ${job_script_options} ${job_unique_options} -- ${child_args} |tee -a ${regression_slurm_commands_file}_${i}
+
    slurm_logfile=$(grep -oP '(?<=--output=)[^ ]+' ${regression_slurm_commands_file}_${i})
    echo ${slurm_logfile} > ${regression_slurm_logname_file}_${i}
    job_number=$(grep "Submitted" ${regression_slurm_commands_file}_${i} | grep -oP '\d+$')
@@ -210,8 +262,13 @@ do
    echo ${job_number} > ${regression_job_numbers_file}_${i}
 }&
 done
-wait
+wait -n
 
+if [[ -n ${max_jobs_in_parallel} ]]; then
+    echo ${singleton_id} > ${regression_summary_dir}/singleton_id.txt
+fi
+
+# remove temporary files
 cat ${regression_slurm_logname_file}_* > ${regression_slurm_logname_file}
 cat ${regression_logname_file}_* > ${regression_logname_file}
 cat ${regression_job_numbers_file}_* > ${regression_job_numbers_file}
@@ -219,6 +276,10 @@ cat ${regression_slurm_commands_file}_* > ${regression_slurm_commands_file}
 rm ${regression_slurm_logname_file}_* ${regression_logname_file}_*
 rm ${regression_job_numbers_file}_* ${regression_slurm_commands_file}_*
 
+# create regression cancellation script
+echo '#!/usr/bin/env bash' > ${regression_cancellation_executable}
+echo "scancel \$(cat ${regression_job_numbers_file})" >> ${regression_cancellation_executable}
+chmod +x ${regression_cancellation_executable}
 
 ########################################################################################################################
 #################################### PRINT LOCATION OF SUMMARY FILES TO USER ###########################################
@@ -231,27 +292,20 @@ echo "${input_command}" > ${regression_command_file}
 hash=$(echo -n `readlink -f $regression_logname_file` | sha1sum | grep -oP '^\w{8}')
 reference="${local_cluster}@${hash}"
 
-echo ""
+echo "${reference}" > ${hash_reference_file}
 
-echo "JOB NUMBERS CONTAINED IN:"
-readlink -f ${regression_job_numbers_file}
-echo ""
+echo "JOB IDs FILE IN: $(readlink -f ${regression_job_numbers_file})"
 
-echo "SLURM LOGFILE NAMES CONTAINED IN:"
-readlink -f ${regression_slurm_logname_file}
-echo ""
+echo "SLURM COMMANDS FILE: $(readlink -f ${regression_slurm_commands_file})"
 
-echo "LOGFILE NAMES CONTAINED IN:"
-readlink -f ${regression_logname_file}
-echo ""
+echo "REGRESSION CANCELLATION SCRIPT: $(readlink -f ${regression_cancellation_executable})"
 
-echo "SLURM COMMANDS CONTAINED IN:"
-readlink -f ${regression_slurm_commands_file}
-echo ""
+echo "REGRESSION COMMAND FILE: $(readlink -f ${regression_command_file})"
 
-echo "REGRESSION COMMAND CONTAINED IN:"
-readlink -f ${regression_command_file}
-echo ""
+echo "SLURM LOGFILES MANIFEST: $(readlink -f ${regression_slurm_logname_file})"
 
-echo "HASH REFERENCE:"
-echo $reference
+echo "SIMULATION LOGS MANIFEST: $(readlink -f ${regression_logname_file})"
+
+echo "HASH REFERENCE FILE: $(readlink -f $hash_reference_file)"
+
+echo "HASH REFERENCE: $reference"

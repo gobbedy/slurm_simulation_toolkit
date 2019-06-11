@@ -1,20 +1,18 @@
-export SLURM_SIMULATION_TOOLKIT_HOME=/home/gobbedy/projects/def-yymao/gobbedy/slurm_simulation_toolkit
-export SLURM_SIMULATION_BASE_SCRIPT=/home/gobbedy/projects/def-yymao/gobbedy/mixup_fun/train.py
+def_account=$(sacctmgr -nP show User $USER | cut -d'|' -f2 | sed 's/_cpu//')
+export SLURM_SIMULATION_TOOLKIT_HOME='' # eg, /home/$USER/projects/${def_account}/$USER/slurm_simulation_toolkit
+export SLURM_SIMULATION_BASE_SCRIPT='' # eg, /home/$USER/projects/${def_account}/$USER/mixup_fun/train.py
 
-source ${SLURM_SIMULATION_TOOLKIT_HOME}/scripts/get_local_cluster.sh
+export SLURM_SIMULATION_TOOLKIT_SBATCH_SCRIPT_PATH=${SLURM_SIMULATION_TOOLKIT_HOME}/scripts/simulation.sbatch
+export SLURM_SIMULATION_TOOLKIT_GET_CLUSTER=${SLURM_SIMULATION_TOOLKIT_HOME}/scripts/get_local_cluster.sh
+source ${SLURM_SIMULATION_TOOLKIT_GET_CLUSTER}
 if [[ $local_cluster == "niagara" ]]; then
-    #regress_dir=/home/y/yymao/${USER}/regress
-    # on niagara, only scratch disk is writable by compute nodes
-    export SLURM_SIMULATION_REGRESS_DIR=/scratch/y/yymao/${USER}/regress
+    def_account_short=$(echo ${def_account} | sed 's/def-//')
+    export SLURM_SIMULATION_TOOLKIT_REGRESS_DIR=/scratch/y/${def_account_short}/${USER}/regress
 elif [[ $local_cluster == "beihang" ]]; then
-    #REGRESS_DIR=/home/LAB/kongfs/${USER}/regress
-    export SLURM_SIMULATION_REGRESS_DIR=/home/LAB/${USER}/regress
+    export SLURM_SIMULATION_TOOLKIT_REGRESS_DIR=/home/LAB/${USER}/regress
 else
-    #REGRESS_DIR=/home/${USER}/projects/def-yymao/${USER}/regress
-    export SLURM_SIMULATION_REGRESS_DIR=/home/${USER}/scratch/regress
+    export SLURM_SIMULATION_TOOLKIT_REGRESS_DIR=/home/${USER}/scratch/regress
 fi
 
-export SLURM_SIMULATION_TOOLKIT_RC=$SLURM_SIMULATION_TOOLKIT_HOME/config/simulation_toolkit.rc
-export SLURM_SIMULATION_TOOLKIT_CLUSTER_CONFIG_RC=$SLURM_SIMULATION_TOOLKIT_HOME/config/default_job_params.rc
-
+export SLURM_SIMULATION_TOOLKIT_JOB_RC_PATH=$SLURM_SIMULATION_TOOLKIT_HOME/config/default_job_params.rc
 export PATH=$SLURM_SIMULATION_TOOLKIT_HOME/scripts:$PATH

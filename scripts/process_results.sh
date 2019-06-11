@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-me_dir=$(dirname $(readlink -f ${0%%@@*}))
-source ${me_dir}/simulation_toolkit.rc
+source ${SLURM_SIMULATION_TOOLKIT_HOME}/config/simulation_toolkit.rc
 
 function showHelp {
 
