@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-source ${SLURM_SIMULATION_TOOLKIT_RC}
+source ${SLURM_SIMULATION_TOOLKIT_HOME}/config/simulation_toolkit.rc
+
 ############################################################################################################
 ######################################## HELPER VARIABLES AND FUNCTIONS ####################################
 ############################################################################################################
@@ -31,13 +32,13 @@ OPTIONS
                           script (aka SCRIPT_NAME). eg 'a=2,str=\"hello\"'
 
   -g, --num_gpus NUM_GPUS
-                          NUM_GPUS is the of GPUs to be allocated to the job. Default 0.
+                          NUM_GPUS is the number of GPUs to be allocated to the job. Default 0.
 
   -j, --job_name JOB_NAME
                           JOB_NAME is the name of job to be displayed in SLURM queue.
 
   -m, --mem MEM
-                          MEM is the amount of memory (eg 500m, 7g) to request. Default 256m.
+                          MEM is the amount of memory (eg 500m, 7g) to request.
 
   --mail EMAIL
                           Send user e-mail when job ends. Sends e-mail to EMAIL
@@ -147,7 +148,7 @@ while [[ $# -ne 0 ]]; do
       fi
     ;;
     -n|--nodes)
-      num_nodes=$2
+      nodes=$2
       shift 2
     ;;
     --num_proc_per_gpu)
@@ -171,12 +172,7 @@ while [[ $# -ne 0 ]]; do
       shift 1
     ;;
     -t|--time)
-      # for now, looks like max duration is 3hours
-      time=`date -d "Dec 31 + $2"  "+%j-%H:%M:%S" |& sed 's/^365-//'`
-	  if [[ $? -ne 0 ]]; then
-	    # date command doesn't like the format given, we assume it's a format that slurm understands directly
-		time=$2
-	  fi
+      time=$2
       shift 2
     ;;
     --wait_for_job)
@@ -192,14 +188,6 @@ done
 ########################################################################################################################
 ########################################### BUILD SLURM OPTIONS ########################################################
 ########################################################################################################################
-
-# request the right number of nodes based on the number of CPU requested
-if [[ ${local_cluster} == "graham" ]]; then
-  num_nodes=$((( ($cpus-1) / 32) + 1 ))
-elif [[ -z ${num_nodes} ]]; then
-  num_nodes=$((( ($cpus-1) / 48) + 1 ))
-fi
-
 if [[ -z ${output_file} ]]; then
   output_file=${job_name}.slurm
 fi
@@ -216,10 +204,10 @@ else
   fi
 fi
 
-slurm_options="--time=${time} --job-name=${job_name} --nodes=${num_nodes}"
+slurm_options="--time=${time} --job-name=${job_name} --nodes=${nodes}"
 slurm_options+=" --output=${output_file} --open-mode=append"
 
-if [[ ${local_cluster} != "beihang" ]]; then
+if [[ ${account} != "dummy" ]]; then
     slurm_options+=" --account=${account}"
 fi
 
@@ -242,7 +230,9 @@ else
     if [[ ${cpus} -gt 0 ]]; then
       slurm_options+=" --ntasks=${cpus}"
     fi
-    slurm_options+=" --mem=${mem}"
+    if [[ ${mem} != "dummy" ]]; then
+        slurm_options+=" --mem=${mem}"
+    fi
 fi
 
 if [[ ${gpus} -gt 0 ]]; then

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-source ${SLURM_SIMULATION_TOOLKIT_RC}
+source ${SLURM_SIMULATION_TOOLKIT_HOME}/config/simulation_toolkit.rc
 
 ######################################################################
 # Setup cleanup routine to trap on any exit condition (even normal)
@@ -55,6 +55,9 @@ do
     echo "Script Arguments:"
     echo $@
     ${script_path} $@ &>> ${gpu_process_logfile}
+    if [[ $? -ne 0 ]]; then
+        die "${script_path} failed. See ${gpu_process_logfile}"
+    fi
 }&
 done
 wait

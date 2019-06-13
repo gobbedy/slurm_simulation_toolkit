@@ -48,7 +48,7 @@ elif [[ ${local_cluster} == "beihang" ]]; then
     else
         nodes=1
         cpus=10
-        mem=''
+        mem=dummy
     fi
 elif [[ ${local_cluster} == "graham" ]]; then
     if [[ ${gpus} == 0 ]]; then
@@ -81,3 +81,13 @@ elif [[ ${local_cluster} == "niagara" ]]; then
     mem=100G
 fi
 
+# request the right number of nodes based on the number of CPU requested
+if [[ ${local_cluster} == "graham" ]]; then
+  nodes=$((( ($cpus-1) / 32) + 1 ))
+elif [[ -z ${nodes} ]]; then
+  nodes=$((( ($cpus-1) / 48) + 1 ))
+fi
+
+if [[ ${local_cluster} == "beihang" ]]; then
+    account='dummy'
+fi

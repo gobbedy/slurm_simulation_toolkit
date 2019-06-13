@@ -1,5 +1,10 @@
 # Common variables and functions
 set -o pipefail
+
+# uncomment these on for debugging
+#set -o errexit
+#set -o xtrace
+
 me=$(basename ${0%%@@*})
 
 # Usage: info "string message"
@@ -20,10 +25,26 @@ function die {
   exit 1
 }
 
-# ADD scripts to PATH variable
-# export PATH=${me_dir}:$PATH
+if [[ -z ${SLURM_SIMULATION_TOOLKIT_HOME} ]]; then
+  die 'Variable ${SLURM_SIMULATION_TOOLKIT_HOME} is not set.'
+fi
+if [[ -z ${SLURM_SIMULATION_TOOLKIT_BASE_SCRIPT} ]]; then
+  die 'Variable ${SLURM_SIMULATION_BASE_SCRIPT} is not set.'
+fi
+if [[ -z ${SLURM_SIMULATION_TOOLKIT_REGRESS_DIR} ]]; then
+  die 'Variable ${SLURM_SIMULATION_TOOLKIT_REGRESS_DIR} is not set.'
+fi
+if [[ -z ${SLURM_SIMULATION_TOOLKIT_JOB_RC_PATH} ]]; then
+  die 'Variable ${SLURM_SIMULATION_TOOLKIT_JOB_RC_PATH} is not set.'
+fi
+if [[ -z ${SLURM_SIMULATION_TOOLKIT_GET_CLUSTER} ]]; then
+  die 'Variable ${SLURM_SIMULATION_TOOLKIT_GET_CLUSTER} is not set.'
+fi
+if [[ -z ${SLURM_SIMULATION_TOOLKIT_SBATCH_SCRIPT_PATH} ]]; then
+  die 'Variable ${SLURM_SIMULATION_TOOLKIT_SBATCH_SCRIPT_PATH} is not set.'
+fi
 
-source ${SLURM_SIMULATION_TOOLKIT_HOME}/scripts/get_local_cluster.sh
+source ${SLURM_SIMULATION_TOOLKIT_GET_CLUSTER}
 
 # time, nodes, cpus, gpus, memory to request by cluster
-source ${SLURM_SIMULATION_TOOLKIT_CLUSTER_CONFIG_RC}
+source ${SLURM_SIMULATION_TOOLKIT_JOB_RC_PATH}

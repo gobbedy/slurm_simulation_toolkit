@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-me_dir=$(dirname $(readlink -f ${0%%@@*}))
-source ${me_dir}/simulation_toolkit.rc
+source ${SLURM_SIMULATION_TOOLKIT_HOME}/config/simulation_toolkit.rc
 
 function showHelp {
 
@@ -204,7 +203,7 @@ fi
 
 if [[ ${local_cluster} == "unsupported" ]]; then
    # beluga doesn't support mailing, so need to use cedar
-   ssh_mail_node="gobbedy@cedar.computecanada.ca"
+   ssh_mail_node="$USER@cedar.computecanada.ca"
    ssh $ssh_mail_node "bash -s" -- < $full_me $original_options
    exit
 fi
@@ -251,7 +250,7 @@ if [[ -n ${cluster} ]]; then
     mkdir ${mnt_dir} 2> /dev/null
 
     # now finally, mount
-    sshfs -o allow_other -o follow_symlinks -o ssh_command="ssh -i ~/.ssh/id_rsa" gobbedy@${cluster_url}:/ ${mnt_dir}
+    sshfs -o allow_other -o follow_symlinks -o ssh_command="ssh -i ~/.ssh/id_rsa" $USER@${cluster_url}:/ ${mnt_dir}
 
     # prepend mnt_dir to manifest file
     if [[ -n ${manifest_file} ]]; then
@@ -278,7 +277,7 @@ num_logs="${#logfiles[@]}"
 if [[ ${num_logs} -gt 1 ]]; then
   if [[ -z ${regression_name} ]]; then
     if [[ -n ${manifest_file} ]]; then
-        manifest_dirname=$(dirname ${manifest_file})
+        manifest_dirname=$(dirname $(readlink -f ${manifest_file}))
         regression_name=$(basename ${manifest_dirname})
     else
         echo "ERROR: regression name not provided (use -n NAME)"
@@ -301,14 +300,9 @@ global_tex_output_dir=${output_dir}/gentex
 
 ################## PROCESS LOGFILES ####################
 
-# create results dir if doesn't exist
-if [[ ! -d ${results_dir} ]]; then
-  mkdir ${results_dir}
-fi
-
 # remove output dir if it already exists, and create new one
 rm -rf ${output_dir}
-mkdir ${output_dir}
+mkdir -p ${output_dir}
 
 # create a tex output dir for all tex files
 mkdir ${global_tex_output_dir}
@@ -480,7 +474,7 @@ do
         pdf_file=${tex_output_dir}/plots_${simulation_name}.pdf
 
         # replace template's COORDINATES with actual coordinates string
-        sed -e "s/COORDINATES_TRAIN_LOSS/${train_loss_coordinates_string}/g" tex_templates/tikzpicture_template.tex > ${tikz_tex_file}
+        sed -e "s/COORDINATES_TRAIN_LOSS/${train_loss_coordinates_string}/g" $SLURM_SIMULATION_TOOLKIT_HOME/tex_templates/tikzpicture_template.tex > ${tikz_tex_file}
         sed -i "s/COORDINATES_TEST_ERROR/${test_error_coordinates_string}/g" ${tikz_tex_file}
 
         # replace template tex's SIMULATION_NAME with actual simulation name
@@ -541,7 +535,7 @@ do
         else
             # replace TIKZPICTURES in train_loss template with the contents of ${tikz_tex_file}
             # credit: https://stackoverflow.com/a/34070185/8112889
-            sed -e "/TIKSZPICTURES/r ${tikz_tex_file}" -e "/TIKSZPICTURES/d" tex_templates/plots_template.tex > ${tex_file}
+            sed -e "/TIKSZPICTURES/r ${tikz_tex_file}" -e "/TIKSZPICTURES/d" $SLURM_SIMULATION_TOOLKIT_HOME/tex_templates/plots_template.tex > ${tex_file}
 
             # generate training loss graph pdf from texfile
             pdflatex -synctex=1 -interaction=nonstopmode -output-directory ${tex_output_dir} ${tex_file} > ${tex_output_dir}/pdflatex.log
@@ -563,7 +557,7 @@ do
 done
 
 if [[ -n ${one_pdf} ]]; then
-    sed -e "/TIKSZPICTURES/r ${global_tikz_texfile}" -e "/TIKSZPICTURES/d" tex_templates/plots_template.tex > ${global_texfile}
+    sed -e "/TIKSZPICTURES/r ${global_tikz_texfile}" -e "/TIKSZPICTURES/d" $SLURM_SIMULATION_TOOLKIT_HOME/tex_templates/plots_template.tex > ${global_texfile}
 
     # generate training loss graph pdf from texfile
     pdflatex -synctex=1 -interaction=nonstopmode -output-directory ${global_tex_output_dir} ${global_texfile} > ${global_tex_output_dir}/pdflatex.log
@@ -620,7 +614,7 @@ if [[ ${num_processed_logs} -gt 1 ]]; then
 
       printf '%s\n' "${test_errors[@]}" > ${test_errors_file}
 
-      sed -e "/TEST_ERROR_LIST/r ${test_errors_file}" -e "/TEST_ERROR_LIST/d" tex_templates/histogram_template.tex > ${test_error_histogram_texfile}
+      sed -e "/TEST_ERROR_LIST/r ${test_errors_file}" -e "/TEST_ERROR_LIST/d" $SLURM_SIMULATION_TOOLKIT_HOME/tex_templates/histogram_template.tex > ${test_error_histogram_texfile}
 
       sed -i "s/MIN_BUCKET_EDGE/${min_test_error_floor}/g" ${test_error_histogram_texfile}
       sed -i "s/MAX_BUCKET_EDGE/${max_test_error_ceil}/g" ${test_error_histogram_texfile}

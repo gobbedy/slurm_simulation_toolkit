@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-source ${SLURM_SIMULATION_TOOLKIT_RC}
+source ${SLURM_SIMULATION_TOOLKIT_HOME}/config/simulation_toolkit.rc
 
 function showHelp {
 
@@ -8,16 +8,22 @@ echo "NAME
      1) Report regression status (running, completed, failed)
      2) Print one line summary of results
 SYNOPSIS
-  $me [OPTIONS]
+  $me [--ref REF | -f MANITEST]
 OPTIONS
   -h, --help
                           Show this description
   --ref REF
                           REF is a short reference to the regression outputted by the mini_regression.sh script.
                           The format is <cluster_name>@<hash_of_log_manifest_filename>
+
+  -f MANIFEST
+                          MANIFEST is a file containing a list of logfiles to process. Only one manifest file may be
+                          provided.
 "
 }
 
+reference=''
+#errors=0
 while [[ "$1" == -* ]]; do
   case "$1" in
     -h|--help)
@@ -28,18 +34,13 @@ while [[ "$1" == -* ]]; do
       reference=$2
       shift 2
     ;;
+    -f)
+      log_manifest=$2
+      shift 2
+    ;;
     -*)
       echo "Invalid option $1"
       exit 1
-    ;;
-  esac
-done
-
-errors=0
-while [[ "$1" == -* ]]; do
-  case "$1" in
-    -*)
-      die "Invalid option $1"
     ;;
   esac
 done
@@ -48,22 +49,33 @@ if [[ $# -ne 0 ]]; then
     die "ERROR: unparsed arguments $@"
 fi
 
-hash_to_find="${reference##*@}"
+if [[ -n ${reference} ]]; then
+    hash_to_find="${reference##*@}"
+    regress_dir=${SLURM_SIMULATION_TOOLKIT_REGRESS_DIR}
+    local_regressions_filename_list=(`readlink -f ${regress_dir}/*/regression_summary/log_manifest.txt`)
+    declare -A local_regressions_filename_hashlist
+    for local_regressions_filename in "${local_regressions_filename_list[@]}"
+    do
+        #echo $local_regressions_filename
+        hash=$(echo -n `readlink -f $local_regressions_filename` | sha1sum | grep -oP '^\w{8}')
+        #echo $hash
+        local_regressions_filename_hashlist[$hash]=$local_regressions_filename
+    done
+    log_manifest=${local_regressions_filename_hashlist[${hash_to_find}]}
+fi
 
-regression_summary_dir=${SLURM_SIMULATION_REGRESS_DIR}/regression_summary
-local_regressions_filename_list=(`readlink -f ${regression_summary_dir}/*/log_manifest.txt`)
-declare -A local_regressions_filename_hashlist
-for local_regressions_filename in "${local_regressions_filename_list[@]}"
-do
-    #echo $local_regressions_filename
-    hash=$(echo -n `readlink -f $local_regressions_filename` | sha1sum | grep -oP '^\w{8}')
-    #echo $hash
-    local_regressions_filename_hashlist[$hash]=$local_regressions_filename
-done
-log_manifest=${local_regressions_filename_hashlist[${hash_to_find}]}
+if [[ ! -f ${log_manifest} ]]; then
+    die "Please provide a valid reference or log manifest."
+fi
+
 regression_summary_dirname=$(dirname ${log_manifest})
 job_manifest="${regression_summary_dirname}/job_manifest.txt"
 command_file="${regression_summary_dirname}/regression_command.txt"
+
+num_proc_per_gpu=$(grep -oPm 1 -- '--num_proc_per_gpu \d+' ${command_file} | grep -oZP '\d+')
+
+#echo "Regression Command:"
+#cat ${command_file}
 
 #echo "JOBS:"
 #cat $job_manifest
@@ -71,163 +83,164 @@ command_file="${regression_summary_dirname}/regression_command.txt"
 #echo "COMMAND:"
 #cat $command_file
 
+echo "Regression Summary Directory:"
+echo ${regression_summary_dirname}
+echo
+
+# files used to summarize results
+slurm_error_manifest_unique=${regression_summary_dirname}/error_manifest_slurm.txt
+simulation_error_manifest=${regression_summary_dirname}/error_manifest.log
+duration_successful_manifest=${regression_summary_dirname}/duration.successful
+slurm_running_manifest_unique=${regression_summary_dirname}/running_manifest_slurm.txt
+simulation_running_manifest=${regression_summary_dirname}/running_manifest.log
+
+rm -f ${slurm_error_manifest_unique}
+rm -f ${simulation_error_manifest}
+rm -f ${duration_successful_manifest}
+rm -f ${slurm_running_manifest_unique}
+rm -f ${simulation_running_manifest}
+
+# temporary files deleted at the end, no need to delete before beginning
+pending_counter_file=${regression_summary_dirname}/pending
+completed_counter_file=${regression_summary_dirname}/completed
+slurm_error_manifest=${regression_summary_dirname}/error_manifest.slurm
+slurm_running_manifest=${regression_summary_dirname}/running_manifest.slurm
+
+
 logfiles=($(cat ${log_manifest}))
 jobid_list=($(cat ${job_manifest}))
 num_logs="${#logfiles[@]}"
-#result_separator="------------------------------------------------------------------------------------------------------------------"
-result_separator=`printf %125s |tr " " "-"`
-num_completed_jobs=0
 
-#for logfile in "${logfiles[@]}"
 test_errors=()
 for (( i=0; i<$num_logs; i++ ));
 do
+{
     logfile=${logfiles[$i]}
     slurm_logfile=$(ls $(dirname $logfile)/*slurm)
 
-    batch_size=$(grep -oPm 1 -- '--batch_size \d+' $slurm_logfile | grep -oZP '\d+')
-    label_dim=$(grep -oPm 1 -- '--label_dim \d+' $slurm_logfile | grep -oZP '\d+')
-    lam_parameters=$(grep -oPm 1 -- '--lam_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oZP '[\w\.]+ [\w\.]+$')
-    gam_parameters=$(grep -oPm 1 -- '--gamma_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oZP '[\w\.]+ [\w\.]+$')
-    dat_parameters=$(grep -oPm 1 -- '--dat_parameters [\w\.]+ [\w\.]+' $slurm_logfile | grep -oZP '[\w\.]+ [\w\.]+$')
-    dat_transform=$(grep -oZPm 1 -- '--dat_transform' $slurm_logfile)
-    no_mixup=$(grep -oZPm 1 -- '--no_mixup' $slurm_logfile)
-    cosine_loss=$(grep -oPm 1 -- '--cosine_loss' $slurm_logfile)
-    dat=$(grep -oZPm 1 -- '--directional_adversarial' $slurm_logfile)
-    dataset=$(grep -oPm 1 -- '--dataset \w+' $slurm_logfile | grep -oZP '\w+$')
-    check_epochs=$(grep -oPm 1 -- '--epoch \d+' $slurm_logfile | grep -oZP '\d+')
-    num_cpus=$(grep -oPm 1 -- '--ntasks=\d+' $slurm_logfile | grep -oZP '\d+')
-
-    echo ${result_separator}
-    echo "LOGFILE: $logfile"
-
     sbatch_command_error=`grep 'sbatch: error' ${slurm_logfile}`
     if [[ -n ${sbatch_command_error} ]]; then
-        error "sbatch command failed. Check ${slurm_logfile}"
-        echo ${result_separator}
-        num_completed_jobs=$(( num_completed_jobs + 1 ))
+        echo ${slurm_logfile} >> ${slurm_error_manifest}
+        echo ${logfile} >> ${simulation_error_manifest}
+        echo 1 >> ${completed_counter_file}
         continue
     fi
 
-    jobid=${jobid_list[$i]}
+    if [[ -n ${num_proc_per_gpu} ]]; then
+        jobid=${jobid_list[$((i/num_proc_per_gpu))]}
+    else
+        jobid=${jobid_list[$i]}
+    fi
 
     job_failed=`sacct -j ${jobid} -o State -n | grep FAILED`
     if [[ -n ${job_failed} ]]; then
-        error "Job ${jobid} completed but failed. Check ${slurm_logfile}"
-        echo ${result_separator}
-        num_completed_jobs=$(( num_completed_jobs + 1 ))
+        echo ${slurm_logfile} >> ${slurm_error_manifest}
+        echo ${logfile} >> ${simulation_error_manifest}
+        echo 1 >> ${completed_counter_file}
+        continue
+    fi
+
+    job_cancelled=`sacct -j ${jobid} -o State -n | grep CANCELLED`
+    if [[ -n ${job_cancelled} ]]; then
+        echo ${slurm_logfile} >> ${slurm_error_manifest}
+        echo ${logfile} >> ${simulation_error_manifest}
+        echo 1 >> ${completed_counter_file}
         continue
     fi
 
     job_pending=`sacct -j ${jobid} -o State -n | grep PENDING`
     if [[ -n ${job_pending} ]]; then
-        echo "Job ${jobid} has not yet started."
-        echo ${result_separator}
+        echo 1 >> ${pending_counter_file}
         continue
     fi
 
-    num_epochs=$(grep -c "Test Acc:" ${logfile})
     job_running=`sacct -j ${jobid} -o State -n | grep RUNNING`
     if [[ -n ${job_running} ]]; then
-        echo "Completed ${num_epochs} out of ${check_epochs} epochs (job ${jobid} still running)."
-        echo ${result_separator}
+        echo ${slurm_logfile} >> ${slurm_running_manifest}
+        echo ${logfile} >> ${simulation_running_manifest}
         continue
     fi
 
-    num_completed_jobs=$(( num_completed_jobs + 1 ))
+    echo 1 >> ${completed_counter_file}
 
-    echo "EPOCHS:"
-    echo $num_epochs
-    if [[ ${num_epochs} -ne ${check_epochs} ]]; then
-      error "Detected only ${num_epochs} out of ${check_epochs} epochs in job ${jobid}."
-      echo ${result_separator}
-      continue
+    if [[ -n ${num_proc_per_gpu} ]]; then
+        if [[ $((i % num_proc_per_gpu)) -eq 0 ]]; then
+            simulation_duration=$(sacct -j ${jobid} -o Elapsed -np | grep -oPm 1 '^[^|]+')
+            echo "${simulation_duration}" >> ${duration_successful_manifest}
+        fi
     else
-        echo "Job ${jobid} completed successfully."
-        simulation_seconds=$(grep "Simulation Duration" ${logfile} | grep -oP '[\d:]+$' | awk -F: '{ print ($1 * 3600) + ($2 * 60) + $3 }')
-        echo "Used ${num_cpus}"
-        echo "Duration ${simulation_seconds} seconds"
+        simulation_duration=$(sacct -j ${jobid} -o Elapsed -np | grep -oPm 1 '^[^|]+')
+        echo "${simulation_duration}" >> ${duration_successful_manifest}
     fi
 
-    average_test_error=$(grep -oP '(?<=Test Acc: )[^%]+' ${logfile} | head -n ${num_epochs} | tail -n 10 | awk '{print 1-$1/100}' | paste -sd+ | bc | awk '{print $1*10}')
-    test_errors+=(${average_test_error})
-
-    echo ${result_separator}
+}&
 done
+wait
 
-if [[ ${num_completed_jobs} -ne ${num_logs} ]]; then
-    echo "${num_completed_jobs} out of ${num_logs} simuations done"
+running=0
+if [[ -f ${simulation_running_manifest} ]]; then
+    running=$(wc -l < ${simulation_running_manifest})
 fi
 
+pending=0
+if [[ -f ${pending_counter_file} ]]; then
+    pending=$(wc -l < ${pending_counter_file})
+fi
+
+successful=0
+if [[ -f ${duration_successful_manifest} ]]; then
+    successful=$(wc -l < ${duration_successful_manifest})
+fi
+
+error=0
+if [[ -f ${simulation_error_manifest} ]]; then
+    errors=$(wc -l < ${simulation_error_manifest})
+fi
+
+num_completed_sims=0
+if [[ -f ${completed_counter_file} ]]; then
+    num_completed_sims=$(wc -l < ${completed_counter_file})
+fi
+
+if [[ -f ${slurm_running_manifest} ]]; then
+    sort -u ${slurm_running_manifest} > ${slurm_running_manifest_unique}
+fi
+
+if [[ -f ${slurm_error_manifest} ]]; then
+    sort -u ${slurm_error_manifest} > ${slurm_error_manifest_unique}
+fi
+
+rm -f ${pending_counter_file} ${completed_counter_file}
+rm -f ${slurm_running_manifest} ${slurm_error_manifest}
+
 if [[ ${errors} -gt 0 ]]; then
-    if [[ ${num_completed_jobs} -ne ${num_logs} ]]; then
+    if [[ ${num_completed_sims} -ne ${num_logs} ]]; then
         echo "REGRESSION WILL FAIL: $errors simulations have errors." >&2
+        echo
+        echo "Failed jobs slurm logs: ${slurm_error_manifest_unique}"
+        echo "Failed simulation logs: ${simulation_error_manifest}"
         exit 1
     else
         echo "REGRESSION FAILED: $errors simulations have errors." >&2
+        echo
+        echo "Failed jobs slurm logs: ${slurm_error_manifest_unique}"
+        echo "Failed simulation logs: ${simulation_error_manifest}"
         exit 1
     fi
 else
-    if [[ ${num_completed_jobs} -ne ${num_logs} ]]; then
-        echo "REGRESSION IN PROGRESS: ${num_completed_jobs}/${num_logs} simulations complete. No errors so far."
+    if [[ ${num_completed_sims} -ne ${num_logs} ]]; then
+        echo "REGRESSION IN PROGRESS: ${num_completed_sims}/${num_logs} simulations complete. No errors so far."
+        echo "Successful: ${successful}"
+        echo "Running: ${running}"
+        echo "Pending: ${pending}"
+        echo
+        echo "Running manifests:"
+        echo "Slurm job logs: ${slurm_running_manifest_unique}"
+        echo "Simulation logs: ${simulation_running_manifest}"
         exit 2
     else
-        echo "REGRESSION SUCCEEDED: ${num_completed_jobs}/${num_logs} simulations complete."
+        echo "REGRESSION SUCCEEDED: ${num_completed_sims}/${num_logs} simulations complete."
+        echo
+        echo "Job durations: ${duration_successful_manifest}"
     fi
 fi
-
-sum_test_error=$( IFS="+"; bc <<< "${test_errors[*]}" )
-test_error_mean=$(awk "BEGIN {print ${sum_test_error}/${num_completed_jobs}; exit}")
-if [[ ${num_completed_jobs} -gt 1 ]]; then
-    test_error_std_dev=$(printf '%s\n' "${test_errors[@]}"  | awk "{sumsq+=(${test_error_mean}-\$1)**2}END{print sqrt(sumsq/(NR-1))}")
-    if [[ "${test_error_std_dev}" == 0 ]]; then
-        die "ERROR: Standard deviation is 0. Did all simulations use the same seed?"
-    fi
-    std_dev_mean=$(echo "${test_error_std_dev}/sqrt(${num_processed_logs})" | bc -l)
-    echo C
-else
-    std_dev_mean="N/A"
-fi
-
-# TODO: add lam_params, dat_param, gam_params (use N/A if relevant)
-echo $lam_parameters
-echo $gam_parameters
-echo $dat_parameters
-if [[ -n ${cosine_loss} ]]; then
-  loss="NC ($label_dim)"
-else
-  loss="CE"
-fi
-
-if [[ -n ${dat} ]]; then
-    sim_type="DAT ${loss}"
-    lam_parameters="N/A"
-    gam_parameters="N/A"
-elif [[ -n ${no_mixup} ]]; then
-    sim_type="BASELINE ${loss}"
-    lam_parameters="N/A"
-    gam_parameters="N/A"
-    dat_parameters="N/A"
-elif [[ -n ${dat_transform} ]]; then
-    # if dat_params 2 1, mixup -- TECHNICALLY OTHER dat_params CAN BE MIXUP BUT UNLIKELY
-    if [ ${dat_parameters} == "3.0 1.0" ] || [ ${dat_parameters} == "3 1" ] ; then
-        sim_type="MIXUP ${loss} (UNIFORM/SANITY)"
-    else
-        sim_type="UNTIED ${loss} (DT)"
-    fi
-    lam_parameters="N/A"
-    gam_parameters="N/A"
-else
-    if [ ${gam_parameters} == "1.0 1.0" ] || [ ${gam_parameters} == "1 1" ] ; then
-        if [ ${lam_parameters} == "1.0 1.0" ] || [ ${lam_parameters} == "1 1" ] ; then
-            sim_type="MIXUP ${loss} (UNIFORM/SANITY)"
-        else
-            sim_type="MIXUP ${loss}"
-        fi
-    else
-        sim_type="UNTIED ${loss} (GS)"
-    fi
-    dat_parameters="N/A"
-fi
-
-echo "${sim_type}, ${dataset}, ${test_error_mean}%, ${std_dev_mean}, ${lam_parameters}, ${gam_parameters}, ${dat_parameters}, ${check_epochs}, ${num_completed_jobs}, ${batch_size}, ${reference}, ${log_manifest}"
