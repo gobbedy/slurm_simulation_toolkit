@@ -189,7 +189,11 @@ fi
 
 successful=0
 if [[ -f ${duration_successful_manifest} ]]; then
-    successful=$(wc -l < ${duration_successful_manifest})
+    if [[ -n ${num_proc_per_gpu} ]]; then
+        successful=$(($(wc -l < ${duration_successful_manifest})*${num_proc_per_gpu}))
+    else
+        successful=$(wc -l < ${duration_successful_manifest})
+    fi
 fi
 
 error=0
