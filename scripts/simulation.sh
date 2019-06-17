@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 source ${SLURM_SIMULATION_TOOLKIT_HOME}/config/simulation_toolkit.rc
+source ${SLURM_SIMULATION_TOOLKIT_JOB_RC_PATH} # time, nodes, cpus, gpus, memory to request by cluster
 
 ############################################################################################################
 ######################################## HELP DOCUMENTATION ################################################
 ############################################################################################################
-
 function showHelp {
 
 echo "NAME - DESCRIPTION
@@ -194,7 +194,7 @@ source_code_dir=$(dirname ${SLURM_SIMULATION_TOOLKIT_BASE_SCRIPT})
 cp -rp ${source_code_dir}/* ${output_dir}
 
 # full path to copied sbatch script
-sbatch_script_path="${SLURM_SIMULATION_TOOLKIT_SBATCH_SCRIPT}"
+sbatch_script_path="${SLURM_SIMULATION_TOOLKIT_SBATCH_SCRIPT_PATH}"
 
 # full path of base script
 script_basename=$(basename ${SLURM_SIMULATION_TOOLKIT_BASE_SCRIPT})

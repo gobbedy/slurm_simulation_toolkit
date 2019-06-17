@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source ${SLURM_SIMULATION_TOOLKIT_HOME}/config/simulation_toolkit.rc
+source ${SLURM_SIMULATION_TOOLKIT_JOB_RC_PATH} # time, nodes, cpus, gpus, memory to request by cluster
 datetime_suffix=$(date +%b%d_%H%M%S_%3N)
 
 #######################################################################################################################
@@ -217,7 +218,7 @@ mkdir -p ${regression_summary_dir}
 ######################## DETERMINE ARGUMENTS TO BE PASSED DOWN TO SIMULATION SCRIPT (simulation.sh) ####################
 ########################################################################################################################
 job_script_options="--account ${account} --time ${time} --num_proc_per_gpu ${num_proc_per_gpu}"
-job_script_options=" --regress_dir ${regress_dir}"
+job_script_options+=" --regress_dir ${regress_dir}"
 
 
 ########################################################################################################################
@@ -230,6 +231,7 @@ if [[ -n ${max_jobs_in_parallel} ]]; then
     last_singleton_id=$(cat ${SLURM_SIMULATION_TOOLKIT_REGRESS_DIR}/singleton_id.txt)
 fi
 
+declare -a pid_list
 for (( i=0; i<$num_jobs; i++ ));
 do
 {
@@ -247,6 +249,9 @@ do
 
    job_unique_options+=" --job_name ${individual_job_name}"
    ${simulation_executable} ${job_script_options} ${job_unique_options} -- ${child_args} &> ${regression_slurm_commands_file}_${i}
+    if [[ $? -ne 0 ]]; then
+        die "${simulation_executable} failed. See ${regression_slurm_commands_file}_${i}."
+    fi
 
    slurm_logfile=$(grep -oP '(?<=--output=)[^ ]+' ${regression_slurm_commands_file}_${i})
    echo ${slurm_logfile} > ${regression_slurm_logname_file}_${i}
@@ -263,8 +268,23 @@ do
 
    echo ${job_number} > ${regression_job_numbers_file}_${i}
 }&
+pid=$!
+pid_list[$i]=$pid
 done
-wait
+
+for (( i=0; i<$num_jobs; i++ ));
+do
+{
+    pid=${pid_list[$i]}
+    wait $pid
+    if [[ $? -ne 0 ]]; then
+        echo "${simulation_executable} failed. See above error."
+        # I think this should kill all the child processes and all of their descendants
+        # reference: https://stackoverflow.com/questions/392022/whats-the-best-way-to-send-a-signal-to-all-members-of-a-process-group
+        kill -TERM -- -$$
+    fi
+}
+done
 
 if [[ -n ${max_jobs_in_parallel} ]]; then
     singleton_id=$(((last_singleton_id+$num_jobs) % ${max_jobs_in_parallel}))

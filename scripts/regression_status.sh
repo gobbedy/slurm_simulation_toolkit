@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 source ${SLURM_SIMULATION_TOOLKIT_HOME}/config/simulation_toolkit.rc
 
+custom_processing_functions=''
+if [[ -f ${SLURM_SIMULATION_TOOLKIT_RESULTS_PROCESSING_FUNCTIONS} ]]; then
+    source ${SLURM_SIMULATION_TOOLKIT_RESULTS_PROCESSING_FUNCTIONS}
+    custom_processing_functions='yes'
+fi
+
 function showHelp {
 
 echo "NAME
@@ -112,6 +118,7 @@ jobid_list=($(cat ${job_manifest}))
 num_logs="${#logfiles[@]}"
 
 test_errors=()
+declare -a pid_list
 for (( i=0; i<$num_logs; i++ ));
 do
 {
@@ -173,9 +180,26 @@ do
         echo "${simulation_duration}" >> ${duration_successful_manifest}
     fi
 
+    if [[ -n ${custom_processing_functions} ]]; then
+        process_logfile ${command_file} ${logfile} ${regression_summary_dirname}
+    fi
+
 }&
+pid=$!
+pid_list[$i]=$pid
 done
-wait
+
+for (( i=0; i<$num_logs; i++ ));
+do
+{
+    pid=${pid_list[$i]}
+    wait $pid
+    if [[ $? -ne 0 ]]; then
+        echo "status failed. See above error."
+        kill -TERM -- -$$
+    fi
+}
+done
 
 running=0
 if [[ -f ${simulation_running_manifest} ]]; then
@@ -247,4 +271,8 @@ else
         echo
         echo "Job durations: ${duration_successful_manifest}"
     fi
+fi
+
+if [[ -n ${custom_processing_functions} ]]; then
+    generate_summary $command_file $regression_summary_dirname
 fi

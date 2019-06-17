@@ -15,11 +15,11 @@ if [[ $local_cluster == "cedar" ]]; then
 else
     account="def-yymao"
 fi
-if [[ $local_cluster == "beihang" ]]; then
-    num_proc_per_gpu=2
-else
+#if [[ $local_cluster == "beihang" ]]; then
+#    num_proc_per_gpu=2
+#else
     num_proc_per_gpu=1
-fi
+#fi
 time="0-4:00:00"
 gpus=1
 if [[ ${local_cluster} == "mammouth" ]]; then

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 source ${SLURM_SIMULATION_TOOLKIT_HOME}/config/simulation_toolkit.rc
+source ${SLURM_SIMULATION_TOOLKIT_JOB_RC_PATH} # time, nodes, cpus, gpus, memory to request by cluster
 
 ############################################################################################################
 ######################################## HELPER VARIABLES AND FUNCTIONS ####################################
 ############################################################################################################
-
 function showHelp {
 
 echo "NAME

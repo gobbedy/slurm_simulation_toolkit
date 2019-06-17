@@ -45,6 +45,3 @@ if [[ -z ${SLURM_SIMULATION_TOOLKIT_SBATCH_SCRIPT_PATH} ]]; then
 fi
 
 source ${SLURM_SIMULATION_TOOLKIT_GET_CLUSTER}
-
-# time, nodes, cpus, gpus, memory to request by cluster
-source ${SLURM_SIMULATION_TOOLKIT_JOB_RC_PATH}

@@ -351,6 +351,7 @@ do
 
     # show average of last 10 test accuracies
     average_test_error=$(grep -oP '(?<=Test Acc: )[^%]+' ${logfile} | head -n ${num_epochs} | tail -n 10 | awk '{print 1-$1/100}' | paste -sd+ | bc | awk '{print $1*10}')
+    echo ${average_test_error}%
     if [[ ${print_individual_results} == "yes" ]]; then
         echo "AVG TEST ERROR OF LAST 10 EPOCHS:"  |tee -a ${processed_results_log}
         if [[ -z ${average_test_error} ]]; then
@@ -398,7 +399,10 @@ do
         #log_basename=${log_basename::-4}
         #simulation_name=762
     else
-        simulation_name=${parent_dir_basename::-13}
+        # remove timestamp
+        to_remove=$(echo ${parent_dir_basename} | grep -oP '_[\d_]+$')
+        simulation_name=$(echo ${parent_dir_basename} | sed -e 's/${to_remove}//g')
+        #simulation_name=${parent_dir_basename::-13}
     fi
 
     # print all training losses to file

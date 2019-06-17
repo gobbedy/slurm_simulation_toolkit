@@ -44,6 +44,7 @@ job_name=$SLURM_JOB_NAME
 slurm_logfile=$output_dir/${job_name}.slurm
 export PYTHONUNBUFFERED=1 # Not needed if already in bashrc
 
+declare -a pid_list
 for (( i=0; i<$num_proc_per_gpu; i++ ));
 do
 {
@@ -59,8 +60,26 @@ do
         die "${script_path} failed. See ${gpu_process_logfile}"
     fi
 }&
+pid=$!
+pid_list[$i]=$pid
 done
-wait
+
+errors=0
+for (( i=0; i<$num_proc_per_gpu; i++ ));
+do
+{
+    pid=${pid_list[$i]}
+    wait $pid
+    if [[ $? -ne 0 ]]; then
+        errors=$((errors + 1))
+    fi
+}
+done
+
+if [[ $errors -gt 0 ]]; then
+    die "${script_path} failed. See above error(s)."
+fi
+
 
 #if [[ ${cluster} != "cedar" ]]; then
 #    ssh $login_node scp -o "StrictHostKeyChecking=no" -r $output_dir gobbedy@cedar.computecanada.ca:/home/gobbedy/projects/def-yymao/gobbedy/regress/mixup_paper/${cluster}
