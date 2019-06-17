@@ -217,9 +217,11 @@ mkdir -p ${regression_summary_dir}
 ########################################################################################################################
 ######################## DETERMINE ARGUMENTS TO BE PASSED DOWN TO SIMULATION SCRIPT (simulation.sh) ####################
 ########################################################################################################################
-job_script_options="--account ${account} --time ${time} --num_proc_per_gpu ${num_proc_per_gpu}"
-job_script_options+=" --regress_dir ${regress_dir}"
-
+job_script_options="--account ${account} --time ${time} --num_proc_per_gpu ${num_proc_per_gpu} --mem ${mem}"
+job_script_options+=" --regress_dir ${regress_dir} --nodes ${nodes} --num_cpus ${cpus} --num_gpus ${gpus}"
+if [[ ${email} == yes ]]; then
+  job_script_options+=" --mail ${EMAIL}"
+fi
 
 ########################################################################################################################
 ################################################ LAUNCH THE JOBS #######################################################
