@@ -2,7 +2,7 @@ def_account=$(sacctmgr -nP show User $USER | cut -d'|' -f2 | sed 's/_cpu//')
 export SLURM_SIMULATION_TOOLKIT_HOME='' # eg, /home/$USER/projects/${def_account}/$USER/slurm_simulation_toolkit
 export SLURM_SIMULATION_TOOLKIT_BASE_SCRIPT='' # eg, /home/$USER/projects/${def_account}/$USER/mixup_fun/train.py
 
-export SLURM_SIMULATION_TOOLKIT_GET_CLUSTER=${SLURM_SIMULATION_TOOLKIT_HOME}/scripts/get_local_cluster.sh
+export SLURM_SIMULATION_TOOLKIT_GET_CLUSTER=${SLURM_SIMULATION_TOOLKIT_HOME}/scripts/get_local_cluster_name.sh
 source ${SLURM_SIMULATION_TOOLKIT_GET_CLUSTER}
 if [[ $local_cluster == "niagara" ]]; then
     def_account_short=$(echo ${def_account} | sed 's/def-//')
