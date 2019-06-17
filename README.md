@@ -2,7 +2,7 @@
 By Guillaume Perrault-Archambault
 
 ## Disclaimer
-The scripts have mainly been tested on Compute Canada and Beihang clusters, and almost exclusively  on GPU nodes.
+The scripts have mainly been tested only on Compute Canada and Beihang clusters, and almost exclusively  on GPU nodes.
 
 Please open an issue if you find a bug or notice that the toolkit does not behave as intended.
 
