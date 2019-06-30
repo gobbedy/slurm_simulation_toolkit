@@ -52,7 +52,7 @@ OPTIONS
                           If for example you are running the command 'train.py --epochs 200' on a GPU resource, and PROC
                           is 3, then 3 instances of 'train.py --epochs 200' will be launched in parallel on the GPU.
 
-                          Default is 2 (process per resource) on Beihang cluster, 1 otherwise.
+                          Default is 1.
 
   --output LOGFILE
                           Logfile is the SLURM output filename.

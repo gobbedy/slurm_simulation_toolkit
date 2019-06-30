@@ -28,8 +28,8 @@ function die {
 if [[ -z ${SLURM_SIMULATION_TOOLKIT_HOME} ]]; then
   die 'Variable ${SLURM_SIMULATION_TOOLKIT_HOME} is not set.'
 fi
-if [[ -z ${SLURM_SIMULATION_TOOLKIT_BASE_SCRIPT} ]]; then
-  die 'Variable ${SLURM_SIMULATION_BASE_SCRIPT} is not set.'
+if [[ -z ${SLURM_SIMULATION_TOOLKIT_SOURCE_ROOT_DIR} ]]; then
+  die 'Variable ${SLURM_SIMULATION_TOOLKIT_SOURCE_ROOT_DIR} is not set.'
 fi
 if [[ -z ${SLURM_SIMULATION_TOOLKIT_REGRESS_DIR} ]]; then
   die 'Variable ${SLURM_SIMULATION_TOOLKIT_REGRESS_DIR} is not set.'

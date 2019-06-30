@@ -1,0 +1,15 @@
+# no mixup ce fashion
+mixup_fun/train.py --num_simulations 100 --num_proc_per_gpu 2 -- --no_mixup --dataset mnist_fashion --batch_size 128 --epoch 200
+
+# alpha ce mnist sweep
+@alpha[0.1:0.1:0.5]
+mixup_fun/train.py --num_simulations 12 --num_proc_per_gpu 2 -- --lam_parameters alpha alpha --gamma_parameters 1.0 1.0 --dataset mnist --batch_size 128 --epoch 200
+
+# alpha ce fashion sweep
+@alpha[1.0:-0.1:0.1], @gamma[1,2,3,4,5]
+mixup_fun/train.py --num_simulations 12 --num_proc_per_gpu 2 -- --lam_parameters alpha alpha --gamma_parameters gamma gamma --dataset mnist_fashion --batch_size 128 --epoch 200
+
+# untied nc mnist sweep
+@alpha[1,2,5,15,25]
+@beta[0.05,0.1,0.2,0.5,1.0]
+mixup_fun/train.py --num_simulations 12 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters alpha beta --cosine_loss --label_dim 300 --dataset mnist --batch_size 128 --epoch 200

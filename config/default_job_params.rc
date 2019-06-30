@@ -1,6 +1,8 @@
 # Set the default time, nodes, cpus, gpus, memory to request by cluster
 # These can be overriden from the command line
 
+num_simulations=12
+
 # job_name will be job_basename unless '--max_jobs_in_parallel' argument is provided in mini_regression.sh
 job_name='dat'
 email=no
