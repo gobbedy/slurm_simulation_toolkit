@@ -85,7 +85,7 @@ All variables on the same line are looped simultaneously.
 
 If multiple loop variable lines are specified before a batch control line, varialbles on previous lines are nested in later lines.
 
-## Example: Regression Control File
+### Example: Regression Control File
 
 File: ```my_example.ctrl```
 ```
