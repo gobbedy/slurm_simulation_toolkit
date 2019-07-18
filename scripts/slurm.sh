@@ -251,7 +251,7 @@ fi
 if [[ ${slurm_command} == "salloc" ]]; then
   slurm_run_command="${slurm_command} ${slurm_options}"
 else
-  slurm_run_command="${slurm_command} ${slurm_options} --export=${export} ${script_name} ${child_args}"
+  slurm_run_command="${slurm_command} ${slurm_options} --hold --export=${export} ${script_name} ${child_args}"
 fi
 
 echo "${me}: SUBMITTING THE FOLLOWING SLURM COMMAND on `date`:"

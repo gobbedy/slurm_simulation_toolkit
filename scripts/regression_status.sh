@@ -26,6 +26,7 @@ OPTIONS
 "
 }
 
+echo "Processing arguments and preparing files..."
 reference_manifest=''
 log_manifest_listing_file=''
 while [[ "$1" == -* ]]; do
@@ -92,6 +93,12 @@ failed_manifest_list=${regression_summary_dir}/failed_manifest_list.txt
 rm -f ${failed_batch_status_out_log}_* ${failed_hash_manifest}_* ${failed_manifest_list}_*
 rm -f ${failed_batch_status_out_log} ${failed_hash_manifest} ${failed_manifest_list}
 
+result_failed_batch_status_out_log=${regression_summary_dir}/result_failed_batch_status_output.log
+result_failed_hash_manifest=${regression_summary_dir}/result_failed_hash_manifest.txt
+result_failed_manifest_list=${regression_summary_dir}/result_failed_manifest_list.txt
+rm -f ${result_failed_batch_status_out_log}_* ${result_failed_hash_manifest}_* ${result_failed_manifest_list}_*
+rm -f ${result_failed_batch_status_out_log} ${result_failed_hash_manifest} ${result_failed_manifest_list}
+
 passed_results=${regression_summary_dir}/passed_results.txt
 passed_batch_status_out_log=${regression_summary_dir}/passed_batch_status_output.log
 passed_hash_manifest=${regression_summary_dir}/passed_hash_manifest.txt
@@ -115,15 +122,19 @@ pending_sim_cnt_file=${regression_summary_dir}/pending_sim_cnt.txt
 running_sim_cnt_file=${regression_summary_dir}/running_sim_cnt.txt
 passed_sim_cnt_file=${regression_summary_dir}/passed_sim_cnt.txt
 failed_sim_cnt_file=${regression_summary_dir}/failed_sim_cnt.txt
+result_failed_sim_cnt_file=${regression_summary_dir}/result_failed_sim_cnt.txt
 rm -f ${pending_sim_cnt_file}_* ${running_sim_cnt_file}_* ${passed_sim_cnt_file}_* ${failed_sim_cnt_file}_*
 rm -f ${pending_sim_cnt_file} ${running_sim_cnt_file} ${passed_sim_cnt_file} ${failed_sim_cnt_file}
+rm -f ${result_failed_sim_cnt_file}_* ${result_failed_sim_cnt_file}
 
 running_sim_manifest=${regression_summary_dir}/running_sim_manifest.txt
 passing_sim_manifest=${regression_summary_dir}/passing_sim_manifest.txt
 failing_sim_manifest=${regression_summary_dir}/failing_sim_manifest.txt
-rm -f ${running_sim_manifest}_* ${passing_sim_manifest}_* ${failing_sim_manifest}_*
-rm -f ${running_sim_manifest} ${passing_sim_manifest} ${failing_sim_manifest}
+result_failing_sim_manifest=${regression_summary_dir}/result_failing_sim_manifest.txt
+rm -f ${running_sim_manifest}_* ${passing_sim_manifest}_* ${failing_sim_manifest}_* ${result_failing_sim_manifest}_*
+rm -f ${running_sim_manifest} ${passing_sim_manifest} ${failing_sim_manifest} ${result_failing_sim_manifest}
 
+echo "Processing Regression..."
 declare -A pid_list
 for (( idx=0; idx<${num_batches}; idx++ ));
 do
@@ -135,26 +146,29 @@ do
     if [[ -n ${reference_manifest} ]]; then
         batch_list_option=" --ref ${hash_reference_list[${idx}]}"
     elif [[ -n ${log_manifest_listing_file} ]]; then
-        batch_list_option=" --f ${log_manifest_list[${idx}]}"
+        batch_list_option=" -f ${log_manifest_list[${idx}]}"
     fi
     ${batch_status_executable} ${batch_list_option} &> ${batch_status_output_log}_${zero_padded_idx}
     return_code=$?
 
     # batch status script failed
-    if [[ ${return_code} -eq 1 ]]; then
+    num_fail=0
+    while [[ ${return_code} -eq 1 ]]; do
         # retry
         echo "${batch_status_executable} failed. Retrying..."
         ${batch_status_executable} ${batch_list_option} &> ${batch_status_output_log}_${zero_padded_idx}
         return_code=$?
         if [[ ${return_code} -eq 1 ]]; then
-            die "${batch_status_executable} failed. See errors in ${batch_status_output_log}_${zero_padded_idx}"
+            num_fail=$((num_fail+1))
+            if [[ ${num_fail} -eq 5 ]]; then
+                die "${batch_status_executable} failed. See errors in ${batch_status_output_log}_${zero_padded_idx}"
+            fi
         fi
-    fi
+    done
 
     # get batch summary dir
     batch_summary_dir=$(grep -A 1 "Batch Summary Directory:" ${batch_status_output_log}_${zero_padded_idx} | tail -n1)
 
-    # I AM HERE: get running + failing manifests + passing manifest
     if [[ -f ${batch_summary_dir}/error_manifest.txt ]]; then
         cat ${batch_summary_dir}/error_manifest.txt > ${failing_sim_manifest}_${zero_padded_idx}
     fi
@@ -163,25 +177,15 @@ do
         cat ${batch_summary_dir}/running_manifest.txt > ${running_sim_manifest}_${zero_padded_idx}
     fi
 
+
     if [[ -f ${batch_summary_dir}/successful_manifest.txt ]]; then
         cat ${batch_summary_dir}/successful_manifest.txt > ${passing_sim_manifest}_${zero_padded_idx}
     fi
-
     # count the number of pending, running, passed, failed sims using manifests in batch summary dir
     grep "Pending:" ${batch_status_output_log}_${zero_padded_idx} | grep -oP '\d+$' > ${pending_sim_cnt_file}_${zero_padded_idx}
     grep "Running:" ${batch_status_output_log}_${zero_padded_idx} | grep -oP '\d+$' > ${running_sim_cnt_file}_${zero_padded_idx}
-    grep "Successful:" ${batch_status_output_log}_${zero_padded_idx} | grep -oP '\d+$' > ${passed_sim_cnt_file}_${zero_padded_idx}
     grep "Failed:" ${batch_status_output_log}_${zero_padded_idx} | grep -oP '\d+$' > ${failed_sim_cnt_file}_${zero_padded_idx}
-
-    # batch failed
-    if [[ ${return_code} -eq 2 ]]; then
-        cp ${batch_status_output_log}_${zero_padded_idx} ${failed_batch_status_out_log}_${zero_padded_idx}
-        if [[ -n ${reference_manifest} ]]; then
-            echo ${hash_reference_list[${idx}]} &> ${failed_hash_manifest}_${zero_padded_idx}
-        elif [[ -n ${log_manifest_listing_file} ]]; then
-            echo ${log_manifest_list[${idx}]} &> ${failed_manifest_list}_${zero_padded_idx}
-        fi
-    fi
+    grep "Successful:" ${batch_status_output_log}_${zero_padded_idx} | grep -oP '\d+$' > ${passed_sim_cnt_file}_${zero_padded_idx}
 
     # batch passed
     if [[ ${return_code} -eq 0 ]]; then
@@ -194,6 +198,37 @@ do
         elif [[ -n ${log_manifest_listing_file} ]]; then
             echo ${log_manifest_list[${idx}]} &> ${passed_manifest_list}_${zero_padded_idx}
         fi
+    else
+        echo "" > ${passed_results}_${zero_padded_idx}
+        if [[ -n ${reference_manifest} ]]; then
+            echo "" &> ${passed_hash_manifest}_${zero_padded_idx}
+        elif [[ -n ${log_manifest_listing_file} ]]; then
+            echo "" &> ${passed_manifest_list}_${zero_padded_idx}
+        fi
+    fi
+
+    # failed while processing results
+    if [[ ${return_code} -eq 5 ]]; then
+        cp ${batch_status_output_log}_${zero_padded_idx} ${result_failed_batch_status_out_log}_${zero_padded_idx}
+        if [[ -n ${reference_manifest} ]]; then
+            echo ${hash_reference_list[${idx}]} &> ${result_failed_hash_manifest}_${zero_padded_idx}
+        elif [[ -n ${log_manifest_listing_file} ]]; then
+            echo ${log_manifest_list[${idx}]} &> ${result_failed_manifest_list}_${zero_padded_idx}
+        fi
+        cat ${batch_summary_dir}/successful_manifest.txt > ${result_failing_sim_manifest}_${zero_padded_idx}
+        grep "Successful:" ${batch_status_output_log}_${zero_padded_idx} | grep -oP '\d+$' > ${result_failed_sim_cnt_file}_${zero_padded_idx}
+        continue
+    fi
+
+    # batch failed
+    if [[ ${return_code} -eq 2 ]]; then
+        cp ${batch_status_output_log}_${zero_padded_idx} ${failed_batch_status_out_log}_${zero_padded_idx}
+        if [[ -n ${reference_manifest} ]]; then
+            echo ${hash_reference_list[${idx}]} &> ${failed_hash_manifest}_${zero_padded_idx}
+        elif [[ -n ${log_manifest_listing_file} ]]; then
+            echo ${log_manifest_list[${idx}]} &> ${failed_manifest_list}_${zero_padded_idx}
+        fi
+        continue
     fi
 
     # all batch jobs still pending
@@ -204,6 +239,7 @@ do
         elif [[ -n ${log_manifest_listing_file} ]]; then
             echo ${log_manifest_list[${idx}]} &> ${pending_manifest_list}_${zero_padded_idx}
         fi
+        continue
     fi
 
     # batch still running
@@ -214,6 +250,7 @@ do
         elif [[ -n ${log_manifest_listing_file} ]]; then
             echo ${log_manifest_list[${idx}]} &> ${running_manifest_list}_${zero_padded_idx}
         fi
+        continue
     fi
 
 }&
@@ -240,19 +277,24 @@ cat ${pending_sim_cnt_file}_* > ${pending_sim_cnt_file}
 cat ${running_sim_cnt_file}_* > ${running_sim_cnt_file}
 cat ${passed_sim_cnt_file}_* > ${passed_sim_cnt_file}
 cat ${failed_sim_cnt_file}_* > ${failed_sim_cnt_file}
+cat ${result_failed_sim_cnt_file}_* > ${result_failed_sim_cnt_file}
 rm -f ${pending_sim_cnt_file}_* ${running_sim_cnt_file}_* ${passed_sim_cnt_file}_* ${failed_sim_cnt_file}_*
+rm -f ${result_failed_sim_cnt_file}_*
 
 pending_sims=$(paste -sd+ ${pending_sim_cnt_file} | bc)
 running_sims=$(paste -sd+ ${running_sim_cnt_file} | bc)
 successful_sims=$(paste -sd+ ${passed_sim_cnt_file} | bc)
 failed_sims=$(paste -sd+ ${failed_sim_cnt_file} | bc)
+result_failed_sims=$(paste -sd+ ${result_failed_sim_cnt_file} | bc)
 
 rm -f ${pending_sim_cnt_file} ${running_sim_cnt_file} ${passed_sim_cnt_file} ${failed_sim_cnt_file}
+rm -f ${result_failed_sim_cnt_file}
 
 cat ${running_sim_manifest}_* > ${running_sim_manifest} 2> /dev/null
 cat ${passing_sim_manifest}_* > ${passing_sim_manifest} 2> /dev/null
 cat ${failing_sim_manifest}_* > ${failing_sim_manifest} 2> /dev/null
-rm -f ${running_sim_manifest}_* ${passing_sim_manifest}_* ${failing_sim_manifest}_*
+cat ${result_failing_sim_manifest}_* > ${result_failing_sim_manifest} 2> /dev/null
+rm -f ${running_sim_manifest}_* ${passing_sim_manifest}_* ${failing_sim_manifest}_* ${result_failing_sim_manifest}_*
 
 pending=0
 if [[ -n $(ls ${pending_batch_status_out_log}_* 2> /dev/null) ]]; then
@@ -262,7 +304,7 @@ if [[ -n $(ls ${pending_batch_status_out_log}_* 2> /dev/null) ]]; then
         pending=$(wc -l < ${pending_hash_manifest})
     elif [[ -n ${log_manifest_listing_file} ]]; then
         cat ${pending_manifest_list}_* > ${pending_manifest_list}
-        rm ${passed_manifest_list}_*
+        rm ${pending_manifest_list}_*
         pending=$(wc -l < ${pending_manifest_list})
     fi
     cat ${pending_batch_status_out_log}_* > ${pending_batch_status_out_log}
@@ -276,7 +318,7 @@ if [[ -n $(ls ${running_batch_status_out_log}_* 2> /dev/null) ]]; then
         running=$(wc -l < ${running_hash_manifest})
     elif [[ -n ${log_manifest_listing_file} ]]; then
         cat ${running_manifest_list}_* > ${running_manifest_list}
-        rm -f ${passed_manifest_list}_*
+        rm -f ${running_manifest_list}_*
         running=$(wc -l < ${running_manifest_list})
     fi
     cat ${running_batch_status_out_log}_* > ${running_batch_status_out_log}
@@ -288,11 +330,12 @@ if [[ -n $(ls ${passed_batch_status_out_log}_* 2> /dev/null) ]]; then
         cat ${passed_hash_manifest}_* > ${passed_hash_manifest}
         cat ${passed_results}_* > ${passed_results}
         rm -f ${passed_hash_manifest}_* ${passed_results}_*
-        successful=$(wc -l < ${passed_hash_manifest})
+        successful=$(grep -cve '^\s*$' < ${passed_hash_manifest})
     elif [[ -n ${log_manifest_listing_file} ]]; then
         cat ${passed_manifest_list}_* > ${passed_manifest_list}
-        rm -f ${passed_manifest_list}_*
-        successful=$(wc -l < ${passed_manifest_list})
+        cat ${passed_results}_* > ${passed_results}
+        rm -f ${passed_manifest_list}_* ${passed_results}_*
+        successful=$(grep -cve '^\s*$' < ${passed_manifest_list})
     fi
     cat ${passed_batch_status_out_log}_* > ${passed_batch_status_out_log}
 fi
@@ -311,9 +354,23 @@ if [[ -n $(ls ${failed_batch_status_out_log}_* 2> /dev/null) ]]; then
     cat ${failed_batch_status_out_log}_* > ${failed_batch_status_out_log}
 fi
 
+result_failed=0
+if [[ -n $(ls ${result_failed_batch_status_out_log}_* 2> /dev/null) ]]; then
+    if [[ -n ${reference_manifest} ]]; then
+        cat ${result_failed_hash_manifest}_* > ${result_failed_hash_manifest}
+        rm -f ${result_failed_hash_manifest}_*
+        result_failed=$(wc -l < ${result_failed_hash_manifest})
+    elif [[ -n ${log_manifest_listing_file} ]]; then
+        cat ${result_failed_manifest_list}_* > ${result_failed_manifest_list}
+        rm -f ${result_failed_manifest_list}_*
+        result_failed=$(wc -l < ${result_failed_manifest_list})
+    fi
+    cat ${result_failed_batch_status_out_log}_* > ${result_failed_batch_status_out_log}
+fi
+
 cat ${batch_status_output_log}_* > ${batch_status_output_log}
 rm -f ${batch_status_output_log}_* ${pending_batch_status_out_log}_* ${running_batch_status_out_log}_*
-rm -f ${passed_batch_status_out_log}_* ${failed_batch_status_out_log}_*
+rm -f ${passed_batch_status_out_log}_* ${failed_batch_status_out_log}_* ${result_failed_batch_status_out_log}_*
 
 echo "REGRESSION SUMMARY DIR: ${regression_summary_dir}"
 echo "----------------------------------------------------------------------------------------------"
@@ -322,6 +379,7 @@ echo "PENDING: ${pending}"
 echo "RUNNING: ${running}"
 echo "PASSED: ${successful}"
 echo "FAILED: ${failed}"
+echo "RESULT FAILED: ${result_failed}"
 if [[ ${running} -gt 0 ]]; then
     if [[ -n ${reference_manifest} ]]; then
         echo "HASHES OF RUNNING BATCHES: ${running_hash_manifest}"
@@ -344,6 +402,13 @@ if [[ ${failed} -gt 0 ]]; then
         echo "MANIFESTS OF FAILED BATCHES: ${failed_manifest_list}"
     fi
 fi
+if [[ ${result_failed} -gt 0 ]]; then
+    if [[ -n ${reference_manifest} ]]; then
+        echo "HASHES OF FAILED BATCHES: ${result_failed_hash_manifest}"
+    elif [[ -n ${log_manifest_listing_file} ]]; then
+        echo "MANIFESTS OF FAILED BATCHES: ${result_failed_manifest_list}"
+    fi
+fi
 
 echo "----------------------------------------------------------------------------------------------"
 echo "SIMULATIONS:"
@@ -351,6 +416,7 @@ echo "PENDING: ${pending_sims}"
 echo "RUNNING: ${running_sims}"
 echo "PASSED: ${successful_sims}"
 echo "FAILED: ${failed_sims}"
+echo "RESULT FAILED (double counts passed/failed): ${result_failed_sims}"
 if [[ ${running_sims} -gt 0 ]]; then
     echo "MANIFEST OF RUNNING SIMS: ${running_sim_manifest}"
 fi
@@ -359,5 +425,8 @@ if [[ ${successful_sims} -gt 0 ]]; then
 fi
 if [[ ${failed_sims} -gt 0 ]]; then
     echo "MANIFEST OF FAILED SIMS: ${failing_sim_manifest}"
+fi
+if [[ ${result_failed_sims} -gt 0 ]]; then
+    echo "MANIFEST OF RESULT-FAILED SIMS: ${result_failing_sim_manifest}"
 fi
 echo "----------------------------------------------------------------------------------------------"

@@ -28,10 +28,19 @@ OPTIONS
                           control file level, the regression control file argument takes precendence.
 
   --max_jobs_in_parallel MAX
-                          Enforce a maximum of MAX jobs in parallel for the current user ($USER). This is useful for
-                          SLURM systems that don't use a fairshare system (eg. in Beta testing phase of a new cluster.)
-                          Makes use of the '--dependency=singleton' option of sbatch. If also provided at the regression
-                          control file level, the regression control file argument takes precendence.
+                          Enforce a maximum of MAX jobs in parallel for the current user ($USER). This is mainly useful
+                          for SLURM systems that don't use a fairshare policy (eg. in Beta testing phase of a new
+                          cluster). Makes use of the '--dependency=<...>' option of sbatch.
+
+                          On systems that DO use a fairshare policy, this option is probably a bad idea, for two
+                          reasons. The first is that fairshare policies handle prioritizing jobs, so there shouldn't be
+                          any need to manually limit the number of jobs to a fixed number.
+
+                          But should the user still decide to use this option on a system using a fairshare policy,
+                          the maximum number of jobs enforcement comes at a price: jobs may stay in the PENDING state
+                          for a longer period of time. This is because the mechanism to preserve order is job
+                          dependencies, and the age factor of pending jobs does not change while it waits for its
+                          dependency to be met. See https://slurm.schedmd.com/priority_multifactor.html
 
                           Default is no maximum.
 
@@ -48,6 +57,16 @@ OPTIONS
 
   --mail EMAIL
                           Send user e-mail when jobs ends. Sends e-mail to EMAIL
+  --preserve_order
+                          Simulations will be run in the same order as they appear in REGRESN_CTRL.
+
+                          Similarly to the --max_jobs_in_parallel option, this comes at a price on systems using a
+                          fairshare policy. The age factor of pending jobs will not change as long as the previous
+                          job has not begun.
+
+                          This can have a BIG impact on job pending times, so use with caution.
+
+                          Order is not preserved by default.
 
   --regresn_ctrl REGRESN_CTRL
                           REGRESN_CTRL is a control file containing a list of simulation batches to run.
@@ -72,6 +91,7 @@ regress_dir=${SLURM_SIMULATION_TOOLKIT_REGRESS_DIR}
 ########################################################################################################################
 max_jobs_in_parallel=''
 regresn_ctrl_file=''
+preserve_order=''
 num_proc_per_gpu='' # will default to 1 in simulation_batch.sh if neither provided here nor in regresn ctrl file
 account='' # will similarly be set to correct default in simulation_batch.sh if not provided
 while [[ $# -ne 0 ]]; do
@@ -111,6 +131,10 @@ while [[ $# -ne 0 ]]; do
       num_proc_per_gpu=$2
       shift 2
     ;;
+    --preserve_order)
+      preserve_order='yes'
+      shift 1
+    ;;
     --regresn_ctrl)
       regresn_ctrl_file=$2
       shift 2
@@ -141,6 +165,7 @@ output_dir=${regress_dir}/${regression_name}
 regression_summary_dir=${output_dir}/regression_summary
 
 # Create names of files that will contain summary information about regression
+summary_logfile=${regression_summary_dir}/summary.log
 batch_outputs_logfile=${regression_summary_dir}/batch_outputs.log
 regression_cancellation_executable=${regression_summary_dir}/cancel_regression.sh
 regression_command_file=${regression_summary_dir}/regression_command.txt
@@ -163,9 +188,9 @@ batch_script_options=" --regress_dir ${output_dir}"
 if [[ ${email} == yes ]]; then
   batch_script_options+=" --mail ${EMAIL}"
 fi
-if [[ -n ${max_jobs_in_parallel} ]]; then
-  batch_script_options+=" --singleton"
-fi
+#if [[ -n ${max_jobs_in_parallel} ]]; then
+#  batch_script_options+=" --singleton"
+#fi
 
 ########################################################################################################################
 ######################################### LAUNCH THE JOB BATCHES #######################################################
@@ -173,6 +198,8 @@ fi
 source_root_dir=${SLURM_SIMULATION_TOOLKIT_SOURCE_ROOT_DIR}
 readarray lines < ${regresn_ctrl_file}
 
+echo "Pre-processing control file..."
+start_time=`date +%s`
 declare -a total_line_list
 for (( idx=0; idx<${#lines[@]}; idx++ ));
 do
@@ -317,15 +344,6 @@ do
 }
 done
 
-echo ${#total_line_list[@]}
-exit
-for (( idx=0; idx<${#total_line_list[@]}; idx++ ));
-do
-{
-    line=${total_line_list[${idx}]}
-}
-done
-
 # split lines into manageable number of simulations
 max_sim_per_bucket=1500
 total_num_sim_bucket=0
@@ -351,7 +369,12 @@ do
 }
 done
 line_bucket_end_idx_list+=($((idx-1)))
+end=`date +%s`
+runtime=$((end-start_time))
+echo "Pre-processing took $runtime seconds"
 
+echo "Launching jobs..."
+start=`date +%s`
 for (( jdx=0; jdx<${#line_bucket_start_idx_list[@]}; jdx++ ));
 do
 {
@@ -410,6 +433,9 @@ do
     fi
 }
 done
+end=`date +%s`
+runtime=$((end-start))
+echo "Launching took $runtime seconds"
 
 # remove temporary files
 cat ${batch_outputs_logfile}_* > ${batch_outputs_logfile}
@@ -420,17 +446,99 @@ echo '#!/usr/bin/env bash' > ${regression_cancellation_executable}
 ls ${output_dir}/*/batch_summary/cancel_batch.sh >> ${regression_cancellation_executable}
 chmod +x ${regression_cancellation_executable}
 
-# update job names if singleton
-if [[ -n ${max_jobs_in_parallel} ]]; then
-    job_id_list=($(cat $(grep "JOB IDs FILE IN:" ${batch_outputs_logfile} | grep -oP "\S+$")))
-    #job_id_list=($(cat ${output_dir}/*/batch_summary/job_manifest.txt|sort -n)) # equivalent
-    singleton_id=0
-    for job_id in "${job_id_list[@]}"; do
-       individual_job_name=${job_name}_${singleton_id}
-       scontrol update jobid=${job_id} JobName=${individual_job_name}
-       singleton_id=$(((singleton_id+1) % ${max_jobs_in_parallel}))
-    done
+
+unset pid_list
+declare -A pid_list
+start=`date +%s`
+echo "Releasing jobs..."
+job_id_list=($(cat $(grep "JOB IDs FILE IN:" ${batch_outputs_logfile} | grep -oP "\S+$")))
+#job_id_list=($(cat ${output_dir}/*/batch_summary/job_manifest.txt|sort -n)) # in launch order
+for (( idx=0; idx<${#job_id_list[@]}; idx++ ));
+do
+{
+    job_id=${job_id_list[${idx}]}
+    individual_job_name="${job_name}"
+    dependency=""
+    if [[ -n ${max_jobs_in_parallel} ]]; then
+
+        # if want max number of jobs without preserving order, can use singleton
+        # this will limit the number of jobs in parallel without impacting the age factor
+        #if [[ -z ${preserve_order} ]]; then
+        #    singleton_id=$((idx % ${max_jobs_in_parallel}))
+        #    individual_job_name+="_${singleton_id}"
+        #
+        #    # shouldn't be necessary to skip first job, but there seems to be a slurm bug
+        #    # aka if singleton dependency add when job is held, then job is released, it stays pending some dependency
+        #    # even though there it shouldn't be blocked by any dependency since no other job by that name is running
+        #    if [[ ${idx} -ne 0 ]]; then
+        #        dependency+="singleton"
+        #    fi
+        #else
+
+        # an easy way to implement max number of jobs would be to use singleton
+        # however if want max number of jobs WITH preserving order, CANNOT use singleton because
+        # singleton does not work in combination with other dependencies (slurm bug?)
+        # instead, impose max number of jobs in parallel by waiting for prior jobs to finish
+        if [[ ${idx} -ge ${max_jobs_in_parallel} ]]; then
+            depend_idx=$((idx-max_jobs_in_parallel))
+            depend_job_id=${job_id_list[${depend_idx}]}
+            dependency+="afterany:${depend_job_id}"
+            #if [[ ${idx} -lt 18 ]]; then
+            #    echo "job ${idx} is ${job_id} and waits until job ${depend_job_id} is done"
+            #fi
+        fi
+
+        #fi
+    fi
+    if [[ -n ${preserve_order} ]]; then
+        if [[ ${idx} -ne 0 ]]; then
+            if [[ -n ${dependency} ]]; then
+                dependency+=","
+            fi
+            prev_idx=$((idx-1))
+            prev_job_id=${job_id_list[${prev_idx}]}
+            dependency+="after:${prev_job_id}"
+        fi
+        #if [[ ${idx} -eq 0 ]]; then
+        #  echo "first job is ${job_id}"
+        #elif [[ ${idx} -lt 18 ]]; then
+        #  echo "job ${idx} is ${job_id} and depends on ${prev_job_id}"
+        #fi
+    fi
+
+
+    dependency_option=''
+    if [[ -n ${dependency} ]]; then
+        dependency_option="Dependency=${dependency}"
+    fi
+
+    scontrol update jobid=${job_id} JobName=${individual_job_name} ${dependency_option}
+    scontrol release ${job_id}
+}&
+pid=$!
+pid_list[$pid]=1
+done
+
+process_error=0
+for pid in "${!pid_list[@]}"
+do
+{
+    #pid=${pid_list[$jdx]}
+    wait $pid
+    if [[ $? -ne 0 ]]; then
+        process_error=$((process_error+1))
+    fi
+}
+done
+
+if [[ ${process_error} -gt 0 ]]; then
+    die "Job releasing failed. See above error(s)."
 fi
+
+
+end=`date +%s`
+runtime=$((end-start))
+echo "Releasing took $runtime seconds"
 
 # get batch directories in the order created
 #batch_dirs=($(grep CANCEL ${batch_outputs_logfile} | grep -oP "${output_dir}/\w+"))
@@ -450,10 +558,12 @@ cat $(grep "BATCH COMMAND" ${batch_outputs_logfile} | grep -oP "\S+$") >> ${batc
 
 echo "${input_command}" > ${regression_command_file}
 
-echo "BATCH SCRIPT OUTPUT LOGFILE: $(readlink -f ${batch_outputs_logfile})"
-echo "BATCH COMMAND MANIFEST: $(readlink -f ${batch_command_manifest})"
-echo "REGRESSION CANCELLATION SCRIPT: $(readlink -f ${regression_cancellation_executable})"
-echo "REGRESSION COMMAND FILE: $(readlink -f ${regression_command_file})"
-echo "REGRESSION CONTROL FILE (COPY): $(readlink -f ${regresn_ctrl_file})"
-echo "SIMULATION MANIFESTS: $(readlink -f ${simulations_manifests})"
-echo "HASH REFERENCES TO BATCH RUNS: $(readlink -f ${hash_manifest})"
+echo "BATCH SCRIPT OUTPUT LOGFILE: $(readlink -f ${batch_outputs_logfile})" |tee -a ${summary_logfile}
+echo "BATCH COMMAND MANIFEST: $(readlink -f ${batch_command_manifest})" |tee -a ${summary_logfile}
+echo "REGRESSION CANCELLATION SCRIPT: $(readlink -f ${regression_cancellation_executable})" |tee -a ${summary_logfile}
+echo "REGRESSION COMMAND FILE: $(readlink -f ${regression_command_file})" |tee -a ${summary_logfile}
+echo "REGRESSION CONTROL FILE (COPY): $(readlink -f ${regresn_ctrl_file})" |tee -a ${summary_logfile}
+echo "SIMULATION MANIFESTS: $(readlink -f ${simulations_manifests})" |tee -a ${summary_logfile}
+echo "HASH REFERENCES TO BATCH RUNS: $(readlink -f ${hash_manifest})" |tee -a ${summary_logfile}
+echo ""
+echo "ABOVE SUMMARY: ${summary_logfile}"

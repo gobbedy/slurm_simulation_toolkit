@@ -73,6 +73,10 @@ if [[ -n ${reference} ]]; then
         log_manifest_hashlist[$hash]=$current_log_manifest
     done
     log_manifest=${log_manifest_hashlist[${hash_to_find}]}
+
+    if [[ ! -f ${log_manifest} ]]; then
+        die "Hash provided is invalid: ${hash_to_find}"
+    fi
 fi
 
 if [[ ! -f ${log_manifest} ]]; then
