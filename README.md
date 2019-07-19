@@ -143,9 +143,13 @@ It goes without saying that the above control file is heavily redundant, launchi
 
 ```regression.sh --max_jobs_in_parallel 8 --num_proc_per_gpu 2 --preserve_order --regresn_ctrl my_example.ctrl```
 
+This example launches the batches specified in the ```my_example.ctrl``` control file.
+
+In this example, the 
+
 ## Example: Launching a Batch of Jobs (TODO: update command and output)
 
-```simulation_batch.sh --num_simulations 12 -- --epochs 200 --batch_size 128```
+```simulation_batch.sh --max_jobs_in_parallel 4 --num_simulations 12 -- --epochs 200 --batch_size 128```
 
 The above assumes that the user's base script (located wherever ```SLURM_SIMULATION_BASE_SCRIPT``` points to) accepts a ```--epochs <NUM_EPOCHS>``` option and a ```--batch_size <BATCH_SIZE>``` option.
 
