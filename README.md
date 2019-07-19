@@ -71,15 +71,15 @@ A batch control line has the following syntax:
 
 ### Loop Variable Syntax
 A loop variable line has the following syntax
-@<VAR1>[<VALUES1>],<VAR2>[<VALUES2>],<VAR3>[<VALUES3>],...,<VARN>[<VALUESN>]
+```@<VAR1>[<VALUES1>],<VAR2>[<VALUES2>],<VAR3>[<VALUES3>],...,<VARN>[<VALUESN>]```
 
-where <VAR1>, <VAR2>, <VAR3>,...,<VARN> are loop variable names.
+where ```<VAR1>```, ```<VAR2>```, ```<VAR3>```,...,```<VARN>``` are loop variable names.
  
-<VALUES1>, <VALUES2>, <VALUES3>,...,<VALUESN> are arrays of values. All <VALUES> arrays on the same line must have the same size.
+```<VALUES1>```, ```<VALUES2>```, ```<VALUES3>```,...,```<VALUESN>``` are arrays of values. All ```<VALUES>``` arrays on the same line must have the same size.
 
-<VALUES> arrays and can be specified in two different ways:
-1. **<start>:<increment>:<stop>** where <start> is the first value, <increment> is the increment value, and <stop> is the last value. Note that if <start> is higher than <stop>, <increment> must be explicitly specified as negative.
-2. **<val1>,<val2>,...,<valM>** where <val1>,<val2>,...,<valM> are unique values, with no ordering constraints.
+```<VALUES>``` arrays and can be specified in two different ways:
+1. **```<start>:<increment>:<stop>```** where ```<start>``` is the first value, ```<increment>``` is the increment value, and ```<stop>``` is the last value. Note that if <start> is higher than <stop>, <increment> must be explicitly specified as negative.
+2. **```<val1>,<val2>,...,<valM>```** where ```<val1>```,```<val2>```,...,```<valM>``` are unique values, with no ordering constraints.
  
 All variables on the same line are looped simultaneously.
 
