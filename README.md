@@ -92,58 +92,62 @@ File: ```my_example.ctrl```
 ## EXAMPLE CONTROL FILE, FILENAME: my_example.ctrl
 
 # simple batch (no loop variables)
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.3 1.3
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.3 1.3
 
 # batch loop using <start>:<increment>:<stop>
 @alpha[1.3:0.2:1.9]
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters alpha alpha
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters alpha alpha
 
 # equivalent using <val1>,<val2>,...,<valM>
 @alpha[1.3,1.5,1.7,1.9]
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters alpha alpha
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters alpha alpha
 
 # equivalent unrolled loop
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.3 1.3
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.5 1.5
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.7 1.7
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.9 1.9
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.3 1.3
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.5 1.5
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.7 1.7
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.9 1.9
 
 # example of simultaneous loop
 @alpha[1.3:0.2:1.9],beta[0.5,1.5,5.0,25.0]
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters alpha beta
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters alpha beta
 
 # equivalent unrolled loop
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.3 0.5
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.5 1.5
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.7 5.0
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.9 25.0
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.3 0.5
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.5 1.5
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.7 5.0
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.9 25.0
 
 # example of nested loop
 @beta[0.5,1.5,5.0]
 @alpha[1.3,1.5]
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters alpha beta
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters alpha beta
 
 # equivalent unrolled loop
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.3 0.5
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.3 1.5
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.3 5.0
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.5 0.5
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.5 1.5
-mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.5 5.0
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.3 0.5
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.3 1.5
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.3 5.0
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.5 0.5
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.5 1.5
+mixup_fun/train.py --num_simulations 6 -- --dat_transform --dat_parameters 1.5 5.0
 ```
 The above control file assumes that the user's base script is located here: ```$SLURM_SIMULATION_TOOLKIT_SOURCE_ROOT_DIR/mixup/train.py```
 
 The user's script, in this example, accepts two arguments: ```--dat_transform```, and ```--dat_parameters <val1> <val2>```
 
+Each setting is run 6 times. Assuming ```--num_proc_per_gpu 2``` (see Launching a Regression), this would result in 3 SLURM jobs for each batch.
+
 It goes without saying that the above control file is heavily redundant, launching identical batches for the sake of showing different methods for doing so.
 
 ## Example: Launching a Regression
+
+```regression.sh --max_jobs_in_parallel 8 --num_proc_per_gpu 2 --preserve_order --regresn_ctrl my_example.ctrl```
 
 ## Example: Launching a Batch of Jobs (TODO: update command and output)
 
 ```simulation_batch.sh --num_simulations 12 -- --epochs 200 --batch_size 128```
 
-The above assumes that your base script (located wherever ```SLURM_SIMULATION_BASE_SCRIPT``` points to) accepts a ```--epochs <NUM_EPOCHS>``` option and a ```--batch_size <BATCH_SIZE>``` option.
+The above assumes that the user's base script (located wherever ```SLURM_SIMULATION_BASE_SCRIPT``` points to) accepts a ```--epochs <NUM_EPOCHS>``` option and a ```--batch_size <BATCH_SIZE>``` option.
 
 Note that toolkit parameters (here ```--num_simulations 12```) are separated from base script parameters (here ```--epochs 200 --batch_size 128```) with ```--```.
 
