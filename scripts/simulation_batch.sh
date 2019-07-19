@@ -49,6 +49,23 @@ OPTIONS
   --mail EMAIL
                           Send user e-mail when jobs ends. Sends e-mail to EMAIL
 
+  --max_jobs_in_parallel MAX
+                          Enforce a maximum of MAX jobs in parallel for the current regression. This is mainly useful
+                          for SLURM systems that don't use a fairshare policy (eg. in Beta testing phase of a new
+                          cluster). Makes use of the '--dependency=<...>' option of sbatch.
+
+                          On systems that DO use a fairshare policy, this option is probably a bad idea, for two
+                          reasons. The first is that fairshare policies handle prioritizing jobs, so there shouldn't be
+                          any need to manually limit the number of jobs to a fixed number.
+
+                          But should the user still decide to use this option on a system using a fairshare policy,
+                          the maximum number of jobs enforcement comes at a price: jobs may stay in the PENDING state
+                          for a longer period of time. This is because the mechanism to preserve order is job
+                          dependencies, and the age factor of pending jobs does not change while it waits for its
+                          dependency to be met. See https://slurm.schedmd.com/priority_multifactor.html
+
+                          Default is no maximum.
+
   --mem MEM
                           MEM is the amount of memory (eg 500m, 7g) to request.
 
@@ -116,6 +133,7 @@ blocking_jobs=()
 singleton=''
 base_script=''
 hold=''
+max_jobs_in_parallel=''
 
 while [[ $# -ne 0 ]]; do
   case "$1" in
@@ -161,6 +179,10 @@ while [[ $# -ne 0 ]]; do
           echo "ERROR: invalid email: ${EMAIL}"
           exit 1
       fi
+    ;;
+    --max_jobs_in_parallel)
+      max_jobs_in_parallel=$2
+      shift 2
     ;;
     --mem)
       mem=$2
@@ -338,6 +360,64 @@ rm ${regression_job_numbers_file}_* ${regression_slurm_commands_file}_*
 echo '#!/usr/bin/env bash' > ${batch_cancellation_executable}
 echo "scancel \$(cat ${regression_job_numbers_file})" >> ${batch_cancellation_executable}
 chmod +x ${batch_cancellation_executable}
+
+########################################################################################################################
+############################################# RELEASE THE JOBS #########################################################
+########################################################################################################################
+
+if [[ -z ${hold} ]]; then
+
+    unset pid_list
+    declare -A pid_list
+    job_id_list=($(cat ${regression_job_numbers_file}))
+    for (( idx=0; idx<${#job_id_list[@]}; idx++ ));
+    do
+    {
+        job_id=${job_id_list[${idx}]}
+        individual_job_name="${job_name}"
+        dependency=""
+        if [[ -n ${max_jobs_in_parallel} ]]; then
+
+            # an easy way to implement max number of jobs would be to use singleton
+            # however if want max number of jobs WITH preserving order, CANNOT use singleton because
+            # singleton does not work in combination with other dependencies (slurm bug?)
+            # instead, impose max number of jobs in parallel by waiting for prior jobs to finish
+            if [[ ${idx} -ge ${max_jobs_in_parallel} ]]; then
+                depend_idx=$((idx-max_jobs_in_parallel))
+                depend_job_id=${job_id_list[${depend_idx}]}
+                dependency+="afterany:${depend_job_id}"
+            fi
+
+        fi
+
+        dependency_option=''
+        if [[ -n ${dependency} ]]; then
+            dependency_option="Dependency=${dependency}"
+        fi
+
+        scontrol update jobid=${job_id} JobName=${individual_job_name} ${dependency_option}
+        scontrol release ${job_id}
+    }&
+    pid=$!
+    pid_list[$pid]=1
+    done
+
+    process_error=0
+    for pid in "${!pid_list[@]}"
+    do
+    {
+        wait $pid
+        if [[ $? -ne 0 ]]; then
+            process_error=$((process_error+1))
+        fi
+    }
+    done
+
+    if [[ ${process_error} -gt 0 ]]; then
+        die "Job releasing failed. See above error(s)."
+    fi
+
+fi
 
 ########################################################################################################################
 #################################### PRINT LOCATION OF SUMMARY FILES TO USER ###########################################

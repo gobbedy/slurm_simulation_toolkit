@@ -28,7 +28,7 @@ OPTIONS
                           control file level, the regression control file argument takes precendence.
 
   --max_jobs_in_parallel MAX
-                          Enforce a maximum of MAX jobs in parallel for the current user ($USER). This is mainly useful
+                          Enforce a maximum of MAX jobs in parallel for the current regression. This is mainly useful
                           for SLURM systems that don't use a fairshare policy (eg. in Beta testing phase of a new
                           cluster). Makes use of the '--dependency=<...>' option of sbatch.
 
@@ -188,12 +188,9 @@ batch_script_options=" --regress_dir ${output_dir}"
 if [[ ${email} == yes ]]; then
   batch_script_options+=" --mail ${EMAIL}"
 fi
-#if [[ -n ${max_jobs_in_parallel} ]]; then
-#  batch_script_options+=" --singleton"
-#fi
 
 ########################################################################################################################
-######################################### LAUNCH THE JOB BATCHES #######################################################
+######################################## PROCESS THE CONTROL FILE ######################################################
 ########################################################################################################################
 source_root_dir=${SLURM_SIMULATION_TOOLKIT_SOURCE_ROOT_DIR}
 readarray lines < ${regresn_ctrl_file}
@@ -261,39 +258,11 @@ do
        loop_iterator_name_list_str="${loop_iterator_name_list[@]}"
        loop_iterator_name_matrix+=("${loop_iterator_name_list_str}")
 
-       # now, say I have vars alpha, alpha_related one line
-       # and say I have beta on another line
-       # then loop_iterator_name_matrix[0] = "alpha alpha_related"
-       # and loop_iterator_name_matrix[1] = "beta"
-
-       # if alpha has size 3, then first element should replace every 3rd line, etc
-       # if beta has size 4, then first element should repeat itself 3 times, then second element 3 times, etc
-       # if gamma has size 2, then first element should repeat itself 12 times, then second element 12 times
-
-       # eg
-       #@alpha[1.0:0.1:1.2]
-       #@beta[0.05,0.1,0.2,0.5]
-
-       # then should have
-       # 1.0 0.05
-       # 1.1 0.05
-       # 1.2 0.05
-       # 1.0 0.1
-       # 1.1 0.1
-       # 1.2 0.1
-       # 1.0 0.2
-       # 1.1 0.2
-       # 1.2 0.2
-       # 1.0 0.5
-       # 1.1 0.5
-       # 1.2 0.5
-
        continue
    fi
 
    if [[ -n ${loop_iterator_name_matrix} ]]; then
-       #line_list=($(yes "$line" | head -n ${unrolled_loop_size}))
-       #line_list=($(printf -- "$line\n%.0s" {1..${unrolled_loop_size}}))
+
        # see https://unix.stackexchange.com/a/136216/205605
        readarray line_list < <(yes $line | head -n ${unrolled_loop_size})
        loop_iterator_matrix_size=${#loop_iterator_name_matrix[@]}
@@ -373,6 +342,10 @@ end=`date +%s`
 runtime=$((end-start_time))
 echo "Pre-processing took $runtime seconds"
 
+########################################################################################################################
+######################################### LAUNCH THE JOB BATCHES #######################################################
+########################################################################################################################
+
 echo "Launching jobs..."
 start=`date +%s`
 for (( jdx=0; jdx<${#line_bucket_start_idx_list[@]}; jdx++ ));
@@ -415,12 +388,10 @@ do
     pid_list[$pid]=1
     done
 
-    #for (( jdx=0; jdx<${#lines[@]}; jdx++ ));
     process_error=0
     for pid in "${!pid_list[@]}"
     do
     {
-        #pid=${pid_list[$jdx]}
         wait $pid
         if [[ $? -ne 0 ]]; then
             process_error=$((process_error+1))
@@ -446,6 +417,9 @@ echo '#!/usr/bin/env bash' > ${regression_cancellation_executable}
 ls ${output_dir}/*/batch_summary/cancel_batch.sh >> ${regression_cancellation_executable}
 chmod +x ${regression_cancellation_executable}
 
+########################################################################################################################
+############################################# RELEASE THE JOBS #########################################################
+########################################################################################################################
 
 unset pid_list
 declare -A pid_list
@@ -461,20 +435,6 @@ do
     dependency=""
     if [[ -n ${max_jobs_in_parallel} ]]; then
 
-        # if want max number of jobs without preserving order, can use singleton
-        # this will limit the number of jobs in parallel without impacting the age factor
-        #if [[ -z ${preserve_order} ]]; then
-        #    singleton_id=$((idx % ${max_jobs_in_parallel}))
-        #    individual_job_name+="_${singleton_id}"
-        #
-        #    # shouldn't be necessary to skip first job, but there seems to be a slurm bug
-        #    # aka if singleton dependency add when job is held, then job is released, it stays pending some dependency
-        #    # even though there it shouldn't be blocked by any dependency since no other job by that name is running
-        #    if [[ ${idx} -ne 0 ]]; then
-        #        dependency+="singleton"
-        #    fi
-        #else
-
         # an easy way to implement max number of jobs would be to use singleton
         # however if want max number of jobs WITH preserving order, CANNOT use singleton because
         # singleton does not work in combination with other dependencies (slurm bug?)
@@ -483,12 +443,8 @@ do
             depend_idx=$((idx-max_jobs_in_parallel))
             depend_job_id=${job_id_list[${depend_idx}]}
             dependency+="afterany:${depend_job_id}"
-            #if [[ ${idx} -lt 18 ]]; then
-            #    echo "job ${idx} is ${job_id} and waits until job ${depend_job_id} is done"
-            #fi
         fi
 
-        #fi
     fi
     if [[ -n ${preserve_order} ]]; then
         if [[ ${idx} -ne 0 ]]; then
@@ -499,11 +455,6 @@ do
             prev_job_id=${job_id_list[${prev_idx}]}
             dependency+="after:${prev_job_id}"
         fi
-        #if [[ ${idx} -eq 0 ]]; then
-        #  echo "first job is ${job_id}"
-        #elif [[ ${idx} -lt 18 ]]; then
-        #  echo "job ${idx} is ${job_id} and depends on ${prev_job_id}"
-        #fi
     fi
 
 
@@ -523,7 +474,6 @@ process_error=0
 for pid in "${!pid_list[@]}"
 do
 {
-    #pid=${pid_list[$jdx]}
     wait $pid
     if [[ $? -ne 0 ]]; then
         process_error=$((process_error+1))
