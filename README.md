@@ -131,9 +131,11 @@ mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform -
 mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.5 1.5
 mixup_fun/train.py --num_simulations 5 --num_proc_per_gpu 2 -- --dat_transform --dat_parameters 1.5 5.0
 ```
-The above assumes that the user's base script is located here: ```$SLURM_SIMULATION_TOOLKIT_SOURCE_ROOT_DIR/mixup/train.py```
+The above control file assumes that the user's base script is located here: ```$SLURM_SIMULATION_TOOLKIT_SOURCE_ROOT_DIR/mixup/train.py```
 
 The user's script, in this example, accepts two arguments: ```--dat_transform```, and ```--dat_parameters <val1> <val2>```
+
+It goes without saying that the above control file is heavily redundant, launching identical batches for the sake of showing different methods for doing so.
 
 ## Example: Launching a Regression
 
