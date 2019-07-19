@@ -34,6 +34,10 @@ OPTIONS
   -g, --num_gpus NUM_GPUS
                           NUM_GPUS is the number of GPUs to be allocated to the job. Default 0.
 
+  --hold
+                          Jobs are submitted in held state. Can be used by parent script to impose a launch order
+                          before releasing jobs.
+
   -j, --job_name JOB_NAME
                           JOB_NAME is the name of job to be displayed in SLURM queue.
 
@@ -88,6 +92,7 @@ OPTIONS
 slurm_command=srun
 singleton=no
 blocking_job_id=''
+hold=''
 
 ########################################################################################################################
 ###################################### ARGUMENT PROCESSING AND CHECKING ################################################
@@ -125,6 +130,10 @@ while [[ $# -ne 0 ]]; do
     -g|--num_gpus)
       gpus=$2
       shift 2
+    ;;
+    --hold)
+      hold=yes
+      shift 1
     ;;
     -j|--job_name)
       job_name=$2
@@ -224,6 +233,10 @@ if [[ ${singleton} == "yes" ]]; then
   slurm_options+=" --dependency=singleton"
 fi
 
+if [[ ${hold} == "yes" ]]; then
+  slurm_options+=" --hold"
+fi
+
 if [[ ${local_cluster} == "niagara" ]]; then
     slurm_options+=" --ntasks=${cpus}"
 else
@@ -251,7 +264,7 @@ fi
 if [[ ${slurm_command} == "salloc" ]]; then
   slurm_run_command="${slurm_command} ${slurm_options}"
 else
-  slurm_run_command="${slurm_command} ${slurm_options} --hold --export=${export} ${script_name} ${child_args}"
+  slurm_run_command="${slurm_command} ${slurm_options} --export=${export} ${script_name} ${child_args}"
 fi
 
 echo "${me}: SUBMITTING THE FOLLOWING SLURM COMMAND on `date`:"

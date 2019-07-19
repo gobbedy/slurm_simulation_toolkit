@@ -406,7 +406,7 @@ do
        fi
 
        zero_padded_idx=$(printf "%05d\n" ${idx}) # for alphabetical ordering
-       ${batch_simulation_executable} --base_script ${base_script} ${batch_script_options} ${batch_unique_options} ${batch_sim_args} &> ${batch_outputs_logfile}_${zero_padded_idx}
+       ${batch_simulation_executable} --hold --base_script ${base_script} ${batch_script_options} ${batch_unique_options} ${batch_sim_args} &> ${batch_outputs_logfile}_${zero_padded_idx}
        if [[ $? -ne 0 ]]; then
            die "${batch_simulation_executable} failed. See ${batch_outputs_logfile}_${zero_padded_idx}"
        fi
