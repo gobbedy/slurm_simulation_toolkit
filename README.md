@@ -1,32 +1,51 @@
 # slurm_simulation_toolkit
 By Guillaume Perrault-Archambault
 
+# Table of Contents  
+[Disclaimer](#header1)  
+[Introduction](#header2)  
+[Requirements](#header3)  
+[Currently Supported Clusters](#header4)  
+[Install Instructions](#header5)  
+[Regression Setup Instructions](#header6)  
+[Regression Control File Syntax](#header7)  
+[Example: Launching a Regression](#header8)  
+[Example: Launching a Batch of Jobs](#header9)  
+[Description of each script](#header10)  
+[Features](#header11)  
+
+<a name="header1"/>
 ## Disclaimer
 The scripts have mainly been tested only on Compute Canada and Beihang clusters, and almost exclusively  on GPU nodes.
 
 Please open an issue if you find a bug or notice that the toolkit does not behave as intended.
 
+<a name="header2"/>
 ## Introduction
 
 This toolkit provides an automated command-line workflow for launching SLURM job regressions (```regression.sh```), monitoring these regressions (```regression_status.sh```), and post-processing regression logs to summarize results (using a custom hook in ```regression_status.sh```).
 
+<a name="header3"/>
 ## Requirements
 
 The scripts were originally designed and tested using bash 4.3.48, and SLURM 17.11.12. These and newer versions of bash and SLURM are supported.
 
 Older versions of bash/SLURM will likely work, but are not officially supported.
 
-## Currently supported clusters
+<a name="header4"/>
+## Currently Supported Clusters
 * Graham
 * Cedar
 * Beluga
 * Niagara
 * Beihang Dell cluster (referred to as "Beihang" in the code)
 
+<a name="header5"/>
 ## Install instructions
 ```git clone https://github.com/gobbedy/slurm_simulation_toolkit <PATH_TO_TOOLKIT>```
 
-## Regression setup instructions
+<a name="header6"/>
+## Regression Setup Instructions
 Every time you open a new shell, set and export the following environment variables:
 
  * ```SLURM_SIMULATION_TOOLKIT_HOME``` should be set to ```<PATH_TO_TOOLKIT>``` (the path to the installed toolkit).  
@@ -50,6 +69,7 @@ WARNING: please do NOT store large amounts of data in the parent directory of yo
 
 For the same reason, please do NOT set SLURM_SIMULATION_TOOLKIT_REGRESS_DIR to any path under one of your source directories, otherwise it will constantly get copied into your output directories.
 
+<a name="header7"/>
 ## Regression Control File Syntax
 Any line whose first non-whitespace character is ```#``` is treated as a comment. Note that in-line comments are NOT supported (ie when ```#``` is not the first character)
 
@@ -139,6 +159,7 @@ Each setting is run 6 times. Assuming ```--num_proc_per_gpu 2``` (see Launching 
 
 It goes without saying that the above control file is heavily redundant, launching identical batches for the sake of showing different methods for doing so.
 
+<a name="header8"/>
 ## Example: Launching a Regression
 
 ```regression.sh --max_jobs_in_parallel 8 --num_proc_per_gpu 2 --preserve_order --regresn_ctrl my_example.ctrl```
@@ -177,6 +198,7 @@ ABOVE SUMMARY: /home/LAB/some_user/regress/Jul22_173044/regression_summary/summa
 
 Run ```regression.sh --help``` for usage of the ```regression.sh``` script.
 
+<a name="header9"/>
 ## Example: Launching a Batch of Jobs
 
 ```simulation_batch.sh --base_script /home/LAB/some_user/mixup_fun/train.py --regress_dir /home/LAB/some_user/regress/batch_test --job_name batch_test --num_simulations 12 --num_proc_per_gpu 2 --max_jobs_in_parallel 8 -- --batch_size 128 --epoch 200```
@@ -199,6 +221,7 @@ HASH REFERENCE: beihang@9c0ad17d
 
 Run ```simulation_batch.sh --help``` for more details on usage.
 
+<a name="header10"/>
 ## Description of each script
 ### slurm.sh
 
@@ -287,6 +310,7 @@ MANIFEST OF FAILED SIMS: /home/LAB/some_user/regress/Jul18_174725/regression_sum
 
 Run ```regression_status.sh --help``` for usage.
 
+<a name="header11"/>
 ## Features
 
  * Parallel job launching: ```regression.sh``` can handle launching hundreds of jobs in parallel in seconds.
