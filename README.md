@@ -44,6 +44,8 @@ Older versions of bash/SLURM will likely work, but are not officially supported.
 * Niagara
 * Beihang Dell cluster (referred to as "Beihang" in the code)
 
+The user can easily add support for a new cluster by modifying the script pointed to by ```SLURM_SIMULATION_TOOLKIT_GET_CLUSTER``` (see [Regression Setup Instructions](#header6)).
+
 <a name="header5"/>
 
 ## Install instructions
