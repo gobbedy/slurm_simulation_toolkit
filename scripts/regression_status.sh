@@ -99,12 +99,12 @@ result_failed_manifest_list=${regression_summary_dir}/result_failed_manifest_lis
 rm -f ${result_failed_batch_status_out_log}_* ${result_failed_hash_manifest}_* ${result_failed_manifest_list}_*
 rm -f ${result_failed_batch_status_out_log} ${result_failed_hash_manifest} ${result_failed_manifest_list}
 
-passed_results=${regression_summary_dir}/passed_results.txt
+results=${regression_summary_dir}/results.txt
 passed_batch_status_out_log=${regression_summary_dir}/passed_batch_status_output.log
 passed_hash_manifest=${regression_summary_dir}/passed_hash_manifest.txt
 passed_manifest_list=${regression_summary_dir}/passed_manifest_list.txt
-rm -f ${passed_results}_* ${passing_batch_status_out_log} ${passed_hash_manifest}_* ${passed_manifest_list}_*
-rm -f ${passed_results} ${passed_batch_status_out_log} ${passed_hash_manifest} ${passed_manifest_list}
+rm -f ${results}_* ${passing_batch_status_out_log} ${passed_hash_manifest}_* ${passed_manifest_list}_*
+rm -f ${results} ${passed_batch_status_out_log} ${passed_hash_manifest} ${passed_manifest_list}
 
 pending_batch_status_out_log=${regression_summary_dir}/pending_batch_status_out_log.txt
 pending_hash_manifest=${regression_summary_dir}/pending_hash_manifest.txt
@@ -192,14 +192,13 @@ do
         # extract results and output them to logfile
         cp ${batch_status_output_log}_${zero_padded_idx} ${passed_batch_status_out_log}_${zero_padded_idx}
         # TODO: generalize to all users
-        tail -n1 ${passed_batch_status_out_log}_${zero_padded_idx} > ${passed_results}_${zero_padded_idx}
+        tail -n1 ${passed_batch_status_out_log}_${zero_padded_idx} > ${results}_${zero_padded_idx}
         if [[ -n ${reference_manifest} ]]; then
             echo ${hash_reference_list[${idx}]} &> ${passed_hash_manifest}_${zero_padded_idx}
         elif [[ -n ${log_manifest_listing_file} ]]; then
             echo ${log_manifest_list[${idx}]} &> ${passed_manifest_list}_${zero_padded_idx}
         fi
     else
-        echo "" > ${passed_results}_${zero_padded_idx}
         if [[ -n ${reference_manifest} ]]; then
             echo "" &> ${passed_hash_manifest}_${zero_padded_idx}
         elif [[ -n ${log_manifest_listing_file} ]]; then
@@ -209,6 +208,7 @@ do
 
     # failed while processing results
     if [[ ${return_code} -eq 5 ]]; then
+        echo "" > ${results}_${zero_padded_idx}
         cp ${batch_status_output_log}_${zero_padded_idx} ${result_failed_batch_status_out_log}_${zero_padded_idx}
         if [[ -n ${reference_manifest} ]]; then
             echo ${hash_reference_list[${idx}]} &> ${result_failed_hash_manifest}_${zero_padded_idx}
@@ -222,7 +222,10 @@ do
 
     # batch failed
     if [[ ${return_code} -eq 2 ]]; then
+        # TODO: generalize to all users
+        #echo blu > ${results}_${zero_padded_idx}
         cp ${batch_status_output_log}_${zero_padded_idx} ${failed_batch_status_out_log}_${zero_padded_idx}
+        tail -n1 ${failed_batch_status_out_log}_${zero_padded_idx} > ${results}_${zero_padded_idx}
         if [[ -n ${reference_manifest} ]]; then
             echo ${hash_reference_list[${idx}]} &> ${failed_hash_manifest}_${zero_padded_idx}
         elif [[ -n ${log_manifest_listing_file} ]]; then
@@ -233,6 +236,7 @@ do
 
     # all batch jobs still pending
     if [[ ${return_code} -eq 3 ]]; then
+        echo "" > ${results}_${zero_padded_idx}
         cp ${batch_status_output_log}_${zero_padded_idx} ${pending_batch_status_out_log}_${zero_padded_idx}
         if [[ -n ${reference_manifest} ]]; then
             echo ${hash_reference_list[${idx}]} &> ${pending_hash_manifest}_${zero_padded_idx}
@@ -244,6 +248,7 @@ do
 
     # batch still running
     if [[ ${return_code} -eq 4 ]]; then
+        echo "" > ${results}_${zero_padded_idx}
         cp ${batch_status_output_log}_${zero_padded_idx} ${running_batch_status_out_log}_${zero_padded_idx}
         if [[ -n ${reference_manifest} ]]; then
             echo ${hash_reference_list[${idx}]} &> ${running_hash_manifest}_${zero_padded_idx}
@@ -328,16 +333,16 @@ successful=0
 if [[ -n $(ls ${passed_batch_status_out_log}_* 2> /dev/null) ]]; then
     if [[ -n ${reference_manifest} ]]; then
         cat ${passed_hash_manifest}_* > ${passed_hash_manifest}
-        cat ${passed_results}_* > ${passed_results}
-        rm -f ${passed_hash_manifest}_* ${passed_results}_*
+        rm -f ${passed_hash_manifest}_*
         successful=$(grep -cve '^\s*$' < ${passed_hash_manifest})
     elif [[ -n ${log_manifest_listing_file} ]]; then
         cat ${passed_manifest_list}_* > ${passed_manifest_list}
-        cat ${passed_results}_* > ${passed_results}
-        rm -f ${passed_manifest_list}_* ${passed_results}_*
+        rm -f ${passed_manifest_list}_*
         successful=$(grep -cve '^\s*$' < ${passed_manifest_list})
     fi
+    cat ${results}_* > ${results}
     cat ${passed_batch_status_out_log}_* > ${passed_batch_status_out_log}
+        rm -f ${results}_*
 fi
 
 failed=0
@@ -393,7 +398,7 @@ if [[ ${successful} -gt 0 ]]; then
     elif [[ -n ${log_manifest_listing_file} ]]; then
         echo "MANIFESTS OF PASSED BATCHES: ${passed_manifest_list}"
     fi
-    echo "RESULTS OF PASSED BATCHES: ${passed_results}"
+    echo "RESULTS OF PASSED/FAILED BATCHES: ${results}"
 fi
 if [[ ${failed} -gt 0 ]]; then
     if [[ -n ${reference_manifest} ]]; then

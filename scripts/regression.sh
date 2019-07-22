@@ -195,6 +195,7 @@ fi
 source_root_dir=${SLURM_SIMULATION_TOOLKIT_SOURCE_ROOT_DIR}
 readarray lines < ${regresn_ctrl_file}
 
+echo "LAUNCHING REGRESSION:"
 echo "Pre-processing control file..."
 start_time=`date +%s`
 declare -a total_line_list
@@ -489,6 +490,7 @@ fi
 end=`date +%s`
 runtime=$((end-start))
 echo "Releasing took $runtime seconds"
+echo ""
 
 # get batch directories in the order created
 #batch_dirs=($(grep CANCEL ${batch_outputs_logfile} | grep -oP "${output_dir}/\w+"))
@@ -508,6 +510,7 @@ cat $(grep "BATCH COMMAND" ${batch_outputs_logfile} | grep -oP "\S+$") >> ${batc
 
 echo "${input_command}" > ${regression_command_file}
 
+echo "SUMMARY FILES:"
 echo "BATCH SCRIPT OUTPUT LOGFILE: $(readlink -f ${batch_outputs_logfile})" |tee -a ${summary_logfile}
 echo "BATCH COMMAND MANIFEST: $(readlink -f ${batch_command_manifest})" |tee -a ${summary_logfile}
 echo "REGRESSION CANCELLATION SCRIPT: $(readlink -f ${regression_cancellation_executable})" |tee -a ${summary_logfile}

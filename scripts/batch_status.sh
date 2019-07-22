@@ -292,6 +292,9 @@ if [[ ${errors} -gt 0 ]]; then
         echo
         echo "Failed jobs slurm logs: ${slurm_error_manifest_unique}"
         echo "Failed simulation logs: ${simulation_error_manifest}"
+        if [[ -n ${custom_processing_functions} ]]; then
+            generate_summary $command_file $batch_summary_dirname
+        fi
         exit 2
     else
         echo "REGRESSION FAILED: $errors simulations have errors." >&2
@@ -302,6 +305,9 @@ if [[ ${errors} -gt 0 ]]; then
         echo
         echo "Failed jobs slurm logs: ${slurm_error_manifest_unique}"
         echo "Failed simulation logs: ${simulation_error_manifest}"
+        if [[ -n ${custom_processing_functions} ]]; then
+            generate_summary $command_file $batch_summary_dirname
+        fi
         exit 2
     fi
 else
@@ -334,8 +340,7 @@ else
         echo
         echo "Job durations: ${duration_successful_manifest}"
     fi
-fi
-
-if [[ -n ${custom_processing_functions} ]]; then
-    generate_summary $command_file $batch_summary_dirname
+    if [[ -n ${custom_processing_functions} ]]; then
+        generate_summary $command_file $batch_summary_dirname
+    fi
 fi
