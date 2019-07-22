@@ -145,29 +145,56 @@ It goes without saying that the above control file is heavily redundant, launchi
 
 This example launches the batches specified in the ```my_example.ctrl``` control file.
 
-In this example, the 
+In this example, the number of running jobs at any given time is capped at 8, and the number of processes per GPU is set to 2. As a result, at most 16 simulations are run in parallel.
 
-## Example: Launching a Batch of Jobs (TODO: update command and output)
-
-```simulation_batch.sh --max_jobs_in_parallel 4 --num_simulations 12 -- --epochs 200 --batch_size 128```
-
-The above assumes that the user's base script (located wherever ```SLURM_SIMULATION_BASE_SCRIPT``` points to) accepts a ```--epochs <NUM_EPOCHS>``` option and a ```--batch_size <BATCH_SIZE>``` option.
-
-Note that toolkit parameters (here ```--num_simulations 12```) are separated from base script parameters (here ```--epochs 200 --batch_size 128```) with ```--```.
+The ```--preserve_order``` switch is enabled, meaning that the batches are launched in the same order as they appear in my_example.ctrl. This switch can affect the time a job waits in the PENDING state on some systems (run ```regression.sh --help``` for details).
 
 Sample output:
 ```
 RUNNING:
-simulation_batch.sh --num_simulations 12 -- --epoch 200 --batch_size 128
+regression.sh --max_jobs_in_parallel 8 --preserve_order --regresn_ctrl cifar_ce_sweep_best.ctrl
 
-JOB IDs FILE IN: /lustre03/project/6004260/gobbedy/regress/regression_summary/dat_Jun05_062358/job_manifest.txt
-SLURM COMMANDS FILE: /lustre03/project/6004260/gobbedy/regress/regression_summary/dat_Jun05_062358/slurm_commands.txt
-REGRESSION CANCELLATION SCRIPT: /lustre03/project/6004260/gobbedy/regress/regression_summary/dat_Jun05_062358/cancel_regression.sh
-REGRESSION COMMAND FILE: /lustre03/project/6004260/gobbedy/regress/regression_summary/dat_Jun05_062358/regression_command.txt
-SLURM LOGFILES MANIFEST: /lustre03/project/6004260/gobbedy/regress/regression_summary/dat_Jun05_062358/slurm_log_manifest.txt
-SIMULATION LOGS MANIFEST: /lustre03/project/6004260/gobbedy/regress/regression_summary/dat_Jun05_062358/log_manifest.txt
-HASH REFERENCE FILE: /lustre03/project/6004260/gobbedy/regress/regression_summary/dat_Jun05_062358/hash_reference.txt
-HASH REFERENCE: beluga@638b8668
+LAUNCHING REGRESSION:
+Pre-processing control file...
+Pre-processing took 0 seconds
+Launching jobs...
+Launching took 9 seconds
+Releasing jobs...
+Releasing took 0 seconds
+
+SUMMARY FILES:
+BATCH SCRIPT OUTPUT LOGFILE: /home/LAB/some_user/regress/Jul22_173044/regression_summary/batch_outputs.log
+BATCH COMMAND MANIFEST: /home/LAB/some_user/regress/Jul22_173044/regression_summary/batch_command_manifest.txt
+REGRESSION CANCELLATION SCRIPT: /home/LAB/some_user/regress/Jul22_173044/regression_summary/cancel_regression.sh
+REGRESSION COMMAND FILE: /home/LAB/some_user/regress/Jul22_173044/regression_summary/regression_command.txt
+REGRESSION CONTROL FILE (COPY): /home/LAB/some_user/regress/Jul22_173044/regression_summary/cifar_ce_sweep_best.ctrl
+SIMULATION MANIFESTS: /home/LAB/some_user/regress/Jul22_173044/regression_summary/simulations_manifests.txt
+HASH REFERENCES TO BATCH RUNS: /home/LAB/some_user/regress/Jul22_173044/regression_summary/hash_manifest.txt
+
+ABOVE SUMMARY: /home/LAB/some_user/regress/Jul22_173044/regression_summary/summary.log
+
+```
+
+Run ```regression.sh --help``` for usage of the ```regression.sh``` script.
+
+## Example: Launching a Batch of Jobs
+
+```simulation_batch.sh --base_script /home/LAB/some_user/mixup_fun/train.py --regress_dir /home/LAB/some_user/regress/batch_test --job_name batch_test --num_simulations 12 --num_proc_per_gpu 2 --max_jobs_in_parallel 8 -- --batch_size 128 --epoch 200```
+
+The above assumes that the user's base script (located at ```/home/LAB/some_user/mixup_fun/train.py```) accepts a ```--epochs <NUM_EPOCHS>``` option and a ```--batch_size <BATCH_SIZE>``` option.
+
+Note that toolkit parameters (here ```--base_script```, ```--regress_dir```, and ```--num_simulations```) are separated from base script parameters (here ```--epochs```, ```--batch_size```) with ```--```.
+
+Sample output:
+```
+JOB IDs FILE IN: /home/LAB/some_user/regress/batch_test/batch_test_4f66b261/batch_summary/job_manifest.txt
+SIMULATION SCRIPT OUTPUT LOGFILE: /home/LAB/some_user/regress/batch_test/batch_test_4f66b261/batch_summary/simulation_output.log
+BATCH CANCELLATION SCRIPT: /home/LAB/some_user/regress/batch_test/batch_test_4f66b261/batch_summary/cancel_batch.sh
+BATCH COMMAND FILE: /home/LAB/some_user/regress/batch_test/batch_test_4f66b261/batch_summary/batch_command.txt
+SLURM LOGFILES MANIFEST: /home/LAB/some_user/regress/batch_test/batch_test_4f66b261/batch_summary/slurm_log_manifest.txt
+SIMULATION LOGS MANIFEST: /home/LAB/some_user/regress/batch_test/batch_test_4f66b261/batch_summary/log_manifest.txt
+HASH REFERENCE FILE: /home/LAB/some_user/regress/batch_test/batch_test_4f66b261/batch_summary/hash_reference.txt
+HASH REFERENCE: beihang@9c0ad17d
 ```
 
 Run ```simulation_batch.sh --help``` for more details on usage.
@@ -189,17 +216,74 @@ Run ```simulation.sh --help``` for usage.
 
 ### simulation_batch.sh
 
-Wraps ```simulation.sh```. Handles launching multiple simulations in parallel. Will generate a regression summary directory containing job ID manifest, logfile manifest, slurm logfile manifest, slurm commands, regression command, hash reference file, and hash reference.
+Wraps ```simulation.sh```. Handles launching multiple simulations in parallel. Will generate a regression summary directory containing job ID manifest, logfile manifest, slurm logfile manifest, batch cancellation script, batch command, hash reference file, hash reference, and a file containing the output of all the calls to ```simulation.sh```.
 
 Run ```simulation_batch.sh --help``` for usage.
 
-### regression_status.sh
+### regression.sh
 
-Uses the summary results generated by ```mini_regression.sh``` to determine whether the regression has passed, failed, or is still running. If still running, breaks down by jobs that are completed, running, or pending.
+Wraps ```simulation_batch.sh```. Handles launching batches in parallel, each with potentially different base scripts. Will generate a regression summary directory containing a listing of batch log manifests, regression cancellation script, regression command, batch command manifest, a copy of the regression control file, and a file containing the output of all the calls to ```simulation_batch.sh```.
+
+Run ```simulation_batch.sh --help``` for usage.
+
+### batch_status.sh
+
+Uses the summary results generated by ```simulation_batch.sh``` to determine whether the batch has passed, failed, or is still running. Breaks down by jobs that are pending, running, successful, and failed.
 
 For each job that has succeeded, will call the user's custom ```process_logfile``` function (if it exists).
 
-If the entire regression succeeded (completed with all jobs passing), will call the user's custom ```generate_summary``` function.
+If the batch has completed (all jobs completed, aka no jobs pending or running), will call the user's custom ```generate_summary``` function.
+
+Sample output:
+```
+$ batch_status.sh -f /home/LAB/some_user/regress/Jul08_134202/dat_5c69aa5e/batch_summary/log_manifest.txt
+Batch Summary Directory:
+/home/LAB/some_user/regress/Jul08_134202/dat_5c69aa5e/batch_summary
+
+REGRESSION FAILED: 2 simulations have errors.
+Pending: 0
+Running: 0
+Successful: 98
+Failed: 2
+
+Failed jobs slurm logs: /home/LAB/some_user/regress/Jul08_134202/dat_5c69aa5e/batch_summary/error_manifest_slurm.txt
+Failed simulation logs: /home/LAB/some_user/regress/Jul08_134202/dat_5c69aa5e/batch_summary/error_manifest.txt
+```
+
+Run ```batch_status.sh --help``` for usage.
+
+### regression_status.sh
+
+Wraps ```batch_status.sh```. Uses the summary results generated by ```regression.sh``` to determine whether the regression to break down batches into pending, running, passed, failed, and 'result failed', where 'result failed' signifies that the user's post-processing has failed. Also breaks down individual simulations into the same categories.
+
+Sample output:
+```
+$ regression_status.sh -f /home/LAB/some_user/regress/Jul18_174725/regression_summary/simulations_manifests.txt
+Processing arguments and preparing files...
+Processing Regression...
+REGRESSION SUMMARY DIR: /home/LAB/some_user/regress/Jul18_174725/regression_summary
+----------------------------------------------------------------------------------------------
+BATCHES:
+PENDING: 5
+RUNNING: 0
+PASSED: 2
+FAILED: 4
+RESULT FAILED: 0
+MANIFESTS OF PASSED BATCHES: /home/LAB/some_user/regress/Jul18_174725/regression_summary/passed_manifest_list.txt
+RESULTS OF PASSED/FAILED BATCHES: /home/LAB/some_user/regress/Jul18_174725/regression_summary/results.txt
+MANIFESTS OF FAILED BATCHES: /home/LAB/some_user/regress/Jul18_174725/regression_summary/failed_manifest_list.txt
+----------------------------------------------------------------------------------------------
+SIMULATIONS:
+PENDING: 536
+RUNNING: 16
+PASSED: 506
+FAILED: 42
+RESULT FAILED (double counts passed/failed): 
+MANIFEST OF RUNNING SIMS: /home/LAB/some_user/regress/Jul18_174725/regression_summary/running_sim_manifest.txt
+MANIFEST OF PASSED SIMS: /home/LAB/some_user/regress/Jul18_174725/regression_summary/passing_sim_manifest.txt
+MANIFEST OF FAILED SIMS: /home/LAB/some_user/regress/Jul18_174725/regression_summary/failing_sim_manifest.txt
+----------------------------------------------------------------------------------------------
+```
 
 Run ```regression_status.sh --help``` for usage.
 
