@@ -77,7 +77,7 @@ Then simply run:
 
 WARNING: please do NOT store large amounts of data in the parent directory of your base script (including in any of its subdirectories), since this directory will be copied to the output directory for shapshotting.
 
-For the same reason, please do NOT set SLURM_SIMULATION_TOOLKIT_REGRESS_DIR to any path under one of your source directories, otherwise it will constantly get copied into your output directories.
+For the same reason, please do NOT set ```SLURM_SIMULATION_TOOLKIT_REGRESS_DIR``` to any path under one of your source directories, otherwise it will constantly get copied into your output directories.
 
 <a name="header7"/>
 
