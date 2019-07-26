@@ -98,7 +98,7 @@ A batch control line has the following syntax:
  
 ```<BATCH OPTIONS>``` are the options passed to the ```simulation_batch.sh``` script, such ```--num_simulations```. Run ```simulation_batch.sh --help``` for a description of all options.
 
-You may include any option supported by ```simulation_batch.sh``` in ```<BATCH OPTIONS>```, with the notable exception of ```regress_dir```, which is handled by the ```regression.sh``` script. Other exceptions are ```--hold``` and ```--singleton``, which sctrictly speaking can be provided, but are unlikely to be useful in the context of launching a regression via ```regression.sh```.
+You may include any option supported by ```simulation_batch.sh``` in ```<BATCH OPTIONS>```, with the notable exception of ```regress_dir```, which is handled by the ```regression.sh``` script. Other exceptions are ```--hold``` and ```--singleton```, which sctrictly speaking can be provided, but are unlikely to be useful in the context of launching a regression via ```regression.sh```.
  
  ```<BASE SCRIPT OPTIONS>``` are options passed down to the user's script.
 
