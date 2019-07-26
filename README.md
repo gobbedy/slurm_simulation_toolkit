@@ -174,13 +174,13 @@ It goes without saying that the above control file is heavily redundant, launchi
 
 ## Example: Launching a Regression
 
-```regression.sh --max_jobs_in_parallel 8 --num_proc_per_gpu 2 --preserve_order --regresn_ctrl my_example.ctrl```
+```regression.sh --max_jobs_in_parallel 8 --num_proc_per_gpu 2 --regresn_ctrl my_example.ctrl```
 
 This example launches the batches specified in the ```my_example.ctrl``` control file.
 
 In this example, the number of running jobs at any given time is capped at 8, and the number of processes per GPU is set to 2. As a result, at most 16 simulations are run in parallel.
 
-The ```--preserve_order``` switch is enabled, meaning that the batches are launched in the same order as they appear in my_example.ctrl. This switch can affect the time a job waits in the PENDING state on some systems (run ```regression.sh --help``` for details).
+The ```--max_jobs_in_parallel``` can affect the time a job waits in the PENDING state on some systems (run ```regression.sh --help``` for details).
 
 Sample output:
 ```
