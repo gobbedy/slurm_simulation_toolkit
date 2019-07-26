@@ -94,9 +94,11 @@ All other lines are batch control lines. The syntax for these lines is described
 A batch control line has the following syntax:
 ```<RELATIVE PATH TO BASE SCRIPT> <BATCH OPTIONS> -- <BASE SCRIPT OPTIONS>```
  
-```<RELATIVE PATH TO BASE SCRIPT>``` is the path of the user's script relative to $SLURM_SIMULATION_TOOLKIT_SOURCE_ROOT_DIR. In other words, the absolute path to the user's script is ```$SLURM_SIMULATION_TOOLKIT_SOURCE_ROOT_DIR/<RELATIVE PATH TO BASE SCRIPT>```
+```<RELATIVE PATH TO BASE SCRIPT>``` is the path of the user's script relative to ```$SLURM_SIMULATION_TOOLKIT_SOURCE_ROOT_DIR```. In other words, the absolute path to the user's script is ```$SLURM_SIMULATION_TOOLKIT_SOURCE_ROOT_DIR/<RELATIVE PATH TO BASE SCRIPT>```
  
 ```<BATCH OPTIONS>``` are the options passed to the ```simulation_batch.sh``` script, such ```--num_simulations```. Run ```simulation_batch.sh --help``` for a description of all options.
+
+You may include any option supported by ```simulation_batch.sh``` in ```<BATCH OPTIONS>```, with the notable exception of ```regress_dir```, which is handled by the ```regression.sh``` script. Other exceptions are ```--hold``` and ```--singleton``, which sctrictly speaking can be provided, but are unlikely to be useful in the context of launching a regression via ```regression.sh```.
  
  ```<BASE SCRIPT OPTIONS>``` are options passed down to the user's script.
 
