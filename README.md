@@ -269,7 +269,16 @@ Run ```simulation_batch.sh --help``` for usage.
 
 Wraps ```simulation_batch.sh```. Handles launching batches in parallel, each with potentially different base scripts. Will generate a regression summary directory containing a listing of batch log manifests, regression cancellation script, regression command, batch command manifest, a copy of the regression control file, and a file containing the output of all the calls to ```simulation_batch.sh```.
 
-Run ```simulation_batch.sh --help``` for usage.
+Run ```regression.sh --help``` for usage.
+
+
+### relaunch_failed.sh
+
+Handles relaunching any failed simulations in a completed (or still running) batch or regression. Also handles relaunching with checkpoint, if the failure was caused by reaching a SLURM time limit. Finally, also provides the same seed as the failing simulation. Note that checkpoint relaunch and seeding require a compatible user script, orelse will be ignored.
+
+The original failed simulations will not be deleted, but they will no longer be tracked via ```regression_status.sh```. The user should locate (via ```regression_status.sh``` or ```batch_status.sh```) and analyze failed simulations before using this script.
+
+Run ```relaunch_failed.sh --help``` for usage.
 
 ### batch_status.sh
 
