@@ -44,6 +44,16 @@ job_name=$SLURM_JOB_NAME
 slurm_logfile=$output_dir/${job_name}.slurm
 export PYTHONUNBUFFERED=1 # Not needed if already in bashrc
 
+if [[ -n ${seeds} ]]; then
+    #seed_list=($(echo "${seeds}" | tr ':' '\n'))
+    #IFS=':' eval 'seed_list=($2)'
+    readarray -td: seed_list <<<"${seeds}"
+fi
+
+if [[ -n ${checkpoints} ]]; then
+    readarray -td: checkpoint_list <<<"${checkpoints}"
+fi
+
 declare -a pid_list
 for (( i=0; i<$num_proc_per_gpu; i++ ));
 do
@@ -53,9 +63,14 @@ do
     echo "Launching ${script_path} on proc ${i}. Logfile:"
     echo ${gpu_process_logfile}
     export CUDA_VISIBLE_DEVICES=0
-    echo "Script Arguments:"
-    echo $@
-    ${script_path} $@ &>> ${gpu_process_logfile}
+    user_script_options="$@"
+    if [[ ${seed_list[i]} = *[![:space:]]* ]]; then
+        user_script_options+=" --seed ${seed_list[i]}"
+    fi
+    if [[ ${checkpoint_list[i]} = *[![:space:]]* ]]; then
+        user_script_options+=" --checkpoint ${checkpoint_list[i]}"
+    fi
+    ${script_path} ${user_script_options} &>> ${gpu_process_logfile}
     if [[ $? -ne 0 ]]; then
         die "${script_path} failed. See ${gpu_process_logfile}"
     fi

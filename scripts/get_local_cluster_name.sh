@@ -28,7 +28,7 @@ if [[ -z ${SLURM_JOB_NODELIST} ]]; then
         local_cluster="niagara"
       ;;
       *)
-        die "ERROR: local cluster unsupported"
+        die "ERROR: local cluster (prefix ${node_prefix}) unsupported"
       ;;
     esac
 else
@@ -46,6 +46,10 @@ else
         local_cluster="beihang"
         login_node="dell-mgt-01"
       ;;
+      sug)
+        local_cluster="beihang"
+        login_node="dell-mgt-01"
+      ;;
       gra)
         local_cluster="graham"
         login_node="gra-login1"
@@ -55,7 +59,7 @@ else
         login_node="nia-login06"
       ;;
       *)
-        die "ERROR: local cluster unsupported"
+        die "ERROR: local cluster (prefix ${node_prefix}) unsupported"
       ;;
     esac
 fi

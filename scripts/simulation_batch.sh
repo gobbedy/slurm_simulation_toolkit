@@ -36,6 +36,13 @@ OPTIONS
                           launched by $me will wait until the first ID in MANIFEST has completed. The second job
                           launched by $me will wait until the second ID in MANIFEST has completed. And so on until N.
 
+  --checkpoints CHECKPOINT_LIST
+                          CHECKPOINT_LIST is a comma-separated list of checkpoints to be provided to each GPU process.
+                          The size of CHECKPOINT_LIST must be PROCS. Assumes the user's script accepts a '--checkpoint'
+                          option.
+
+                          By default no checkpoints are passed to the user script.
+
   --hold
                           Jobs are submitted in held state. Can be used by parent script to impose a launch order
                           before releasing jobs.
@@ -95,10 +102,20 @@ OPTIONS
 
                           Default is 12.
 
+  -p PARTITION
+                          PARTITION is the name of the cluster partition to use. Default is no partition provided (aka
+                          use the system's default partition).
+
   --regress_dir REGRESS_DIR
                           REGRESS_DIR is the directory beneath which the simulation output directories will be generated.
 
                           Default is ${SLURM_SIMULATION_TOOLKIT_REGRESS_DIR}.
+
+  --seeds SEED_LIST
+                          SEED_LIST is a comma-separated list of seeds to be provided to each simulation. The size of
+                          SEED_LIST must be SIMS. Assumes that the user's script accepts a '--seed' option.
+
+                          By default no seeds are passed to the user script.
 
   --singleton
                           If provided, only one job named JOB_NAME will run at a time by this user on this cluster. If
@@ -134,8 +151,11 @@ singleton=''
 base_script=''
 hold=''
 max_jobs_in_parallel=''
-
+seed_list=''
+checkpoint_list=''
+partition=''
 while [[ $# -ne 0 ]]; do
+  #echo $1
   case "$1" in
     -h|--help)
       showHelp
@@ -157,6 +177,10 @@ while [[ $# -ne 0 ]]; do
     ;;
     --blocking_job_manifest)
       blocking_jobs+=(`cat $2`)
+      shift 2
+    ;;
+    --checkpoints)
+      readarray -td, checkpoint_list <<<"$2"
       shift 2
     ;;
     --hold)
@@ -208,8 +232,18 @@ while [[ $# -ne 0 ]]; do
       num_simulations=$2
       shift 2
     ;;
+    -p)
+      partition=$2
+      shift 2
+    ;;
     --regress_dir)
       regress_dir=$2
+      shift 2
+    ;;
+    --seeds)
+      #seed_list=($(echo "$2" | tr ',' '\n'))
+      #IFS=',' eval 'seed_list=($2)'
+      readarray -td, seed_list <<<"$2"
       shift 2
     ;;
     --singleton)
@@ -226,7 +260,6 @@ while [[ $# -ne 0 ]]; do
     ;;
   esac
 done
-
 if [[ -z ${base_script} ]]; then
     die "Base script must be provided via --base_script option."
 fi
@@ -239,9 +272,19 @@ base_script=$(readlink -f ${base_script})
 if (( ${num_simulations} % ${num_proc_per_gpu} )) ; then
   die "$num_simulations not divisible by $num_proc_per_gpu"
 fi
-
 num_jobs=$(echo $((num_simulations / num_proc_per_gpu)))
 
+if [[ -n ${seed_list[@]} ]]; then
+    if [[ ${#seed_list[@]} -ne ${num_simulations} ]]; then
+        die "Seed list (${seed_list[@]}) must have same size as number of simulations (${num_simulations})"
+    fi
+fi
+
+if [[ -n ${checkpoint_list[@]} ]]; then
+    if [[ ${#checkpoint_list[@]} -ne ${num_simulations} ]]; then
+        die "Checkpoint list (${checkpoint_list[@]}) must have same size as number of simulations (${num_simulations})"
+    fi
+fi
 
 if [[ "${#blocking_jobs[@]}" -gt ${num_jobs} ]]; then
     msg="Number of blocking jobs (${#blocking_jobs[@]}) in the job manifest ($blocking_job_manifest)"
@@ -285,6 +328,9 @@ fi
 if [[ ${hold} == "yes" ]]; then
   job_script_options+=" --hold"
 fi
+if [[ -n ${partition} ]]; then
+  job_script_options+=" -p ${partition}"
+fi
 
 ########################################################################################################################
 ################################################ LAUNCH THE JOBS #######################################################
@@ -296,7 +342,21 @@ do
 {
    job_unique_options=''
    if [[ "${#blocking_jobs[@]}" -gt 0 ]]; then
-     job_unique_options+=" --wait_for_job ${blocking_jobs[$i]}"
+       job_unique_options+=" --wait_for_job ${blocking_jobs[$i]}"
+   fi
+
+   if [[ -n ${seed_list[@]} ]]; then
+       seed_start_index=$((i*num_proc_per_gpu))
+       seeds=$(printf '%s,' "${seed_list[@]:${seed_start_index}:${num_proc_per_gpu}}")
+       seeds=${seeds::-1} # remove trailing comma
+       job_unique_options+=" --seeds ${seeds}"
+   fi
+
+   if [[ -n ${checkpoint_list[@]} ]]; then
+       checkpoint_start_index=$((i*num_proc_per_gpu))
+       checkpoints=$(printf '%s,' "${checkpoint_list[@]:${checkpoint_start_index}:${num_proc_per_gpu}}")
+       checkpoints=${checkpoints::-1} # remove trailing comma
+       job_unique_options+=" --checkpoints ${checkpoints}"
    fi
 
    job_unique_options+=" --job_name ${job_name}"
@@ -374,7 +434,7 @@ if [[ -z ${hold} ]]; then
     do
     {
         job_id=${job_id_list[${idx}]}
-        individual_job_name="${job_name}"
+
         dependency=""
         if [[ -n ${max_jobs_in_parallel} ]]; then
 
@@ -393,9 +453,8 @@ if [[ -z ${hold} ]]; then
         dependency_option=''
         if [[ -n ${dependency} ]]; then
             dependency_option="Dependency=${dependency}"
+            scontrol update jobid=${job_id} ${dependency_option}
         fi
-
-        scontrol update jobid=${job_id} JobName=${individual_job_name} ${dependency_option}
         scontrol release ${job_id}
     }&
     pid=$!

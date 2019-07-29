@@ -426,13 +426,12 @@ unset pid_list
 declare -A pid_list
 start=`date +%s`
 echo "Releasing jobs..."
-job_id_list=($(cat $(grep "JOB IDs FILE IN:" ${batch_outputs_logfile} | grep -oP "\S+$")))
-#job_id_list=($(cat ${output_dir}/*/batch_summary/job_manifest.txt|sort -n)) # in launch order
+job_id_list=($(cat $(grep "JOB IDs FILE IN:" ${batch_outputs_logfile} | grep -oP "\S+$"))) # in launch order
+#job_id_list=($(cat ${output_dir}/*/batch_summary/job_manifest.txt|sort -n)) # in submit order (aka job number order)
 for (( idx=0; idx<${#job_id_list[@]}; idx++ ));
 do
 {
     job_id=${job_id_list[${idx}]}
-    individual_job_name="${job_name}"
     dependency=""
     if [[ -n ${max_jobs_in_parallel} ]]; then
 
@@ -462,9 +461,9 @@ do
     dependency_option=''
     if [[ -n ${dependency} ]]; then
         dependency_option="Dependency=${dependency}"
+        scontrol update jobid=${job_id} ${dependency_option}
     fi
 
-    scontrol update jobid=${job_id} JobName=${individual_job_name} ${dependency_option}
     scontrol release ${job_id}
 }&
 pid=$!

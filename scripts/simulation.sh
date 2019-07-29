@@ -30,6 +30,13 @@ OPTIONS
                           BASE_SCRIPT is the is the path to base script that the user wishes to execute on a SLURM
                           compute node.
 
+  --checkpoints CHECKPOINT_LIST
+                          CHECKPOINT_LIST is a comma-separated list of checkpoints to be provided to each GPU process.
+                          The size of CHECKPOINT_LIST must be PROCS. Assumes the user's script accepts a '--checkpoint'
+                          option.
+
+                          By default no checkpoints are passed to the user script.
+
   --hold
                           Jobs are submitted in held state. Can be used by parent script to impose a launch order
                           before releasing jobs.
@@ -63,13 +70,20 @@ OPTIONS
 
                           Default is 1.
 
+  -p PARTITION
+                          PARTITION is the name of the cluster partition to use. Default is no partition provided (aka
+                          use the system's default partition).
+
   --regress_dir REGRESS_DIR
                           REGRESS_DIR is the directory beneath which the simulation output directory will be generated.
 
                           Default is ${SLURM_SIMULATION_TOOLKIT_REGRESS_DIR}.
 
-  --seed SEED
-                          SEED is simulation seed. If not provided, base script randomizes.
+  --seeds SEED_LIST
+                          SEED_LIST is a comma-separated list of seeds to be provided to each GPU process. The size of
+                          SEED_LIST must be PROCS. Assumes that the user's script accepts a '--seed' option.
+
+                          By default no seeds are passed to the user script.
 
   --singleton
                           If provided, only one job named JOB_NAME will run at a time by this user on this cluster. If
@@ -91,12 +105,16 @@ OPTIONS
 ########################################################################################################################
 ######################################## SET DEFAULT REGRESSION PARAMETERS #############################################
 ########################################################################################################################
-seed=''
 blocking_job_id=''
 singleton='no'
 regress_dir=${SLURM_SIMULATION_TOOLKIT_REGRESS_DIR}
 base_script=''
 hold=''
+seed_list=''
+seed_list_str=''
+checkpoint_list=''
+checkpoint_list_str=''
+partition=''
 
 ########################################################################################################################
 ###################################### ARGUMENT PROCESSING AND CHECKING ################################################
@@ -120,6 +138,12 @@ while [[ $# -ne 0 ]]; do
     ;;
     --base_script)
       base_script=$2
+      shift 2
+    ;;
+    --checkpoints)
+      readarray -td, checkpoint_list <<<"$2"
+      checkpoint_list_str=$(printf ":%s" "${checkpoint_list[@]}")
+      checkpoint_list_str=${checkpoint_list_str:1}
       shift 2
     ;;
     --hold)
@@ -163,12 +187,20 @@ while [[ $# -ne 0 ]]; do
       num_proc_per_gpu=$2
       shift 2
     ;;
+    -p)
+      partition=$2
+      shift 2
+    ;;
     --regress_dir)
       regress_dir=$2
       shift 2
     ;;
-    -s|--seed)
-      seed=$2
+    --seeds)
+      #seed_list=($(echo "$2" | tr ',' '\n'))
+      #IFS=',' eval 'seed_list=($2)'
+      readarray -td, seed_list <<<"$2"
+      seed_list_str=$(printf ":%s" "${seed_list[@]}")
+      seed_list_str=${seed_list_str:1}
       shift 2
     ;;
     --singleton)
@@ -198,6 +230,18 @@ if [[ ! -f ${base_script} ]]; then
 fi
 base_script=$(readlink -f ${base_script})
 
+if [[ -n ${seed_list[@]} ]]; then
+    if [[ ${#seed_list[@]} -ne ${num_proc_per_gpu} ]]; then
+        die "Seed list (${seed_list[@]}) must have same size as number of GPU processes (${num_proc_per_gpu})"
+    fi
+fi
+
+if [[ -n ${checkpoint_list[@]} ]]; then
+    if [[ ${#checkpoint_list[@]} -ne ${num_proc_per_gpu} ]]; then
+        die "Checkpoint list (${checkpoint_list[@]}) must have same size as number of GPU processes (${num_proc_per_gpu})"
+    fi
+fi
+
 ############################################################################################################
 ######################################### SIMULATION PARAMETERS ############################################
 ############################################################################################################
@@ -225,7 +269,7 @@ base_script_copy="${output_dir}/$(basename ${base_script})"
 sbatch_script_path="${SLURM_SIMULATION_TOOLKIT_SBATCH_SCRIPT_PATH}"
 
 # prepare arguments to job script (slurm.sh)
-export="script_path=\"${base_script_copy}\",output_dir=\"${output_dir}\",ALL"
+export="checkpoints=\"${checkpoint_list_str}\",seeds=\"${seed_list_str}\",script_path=\"${base_script_copy}\",output_dir=\"${output_dir}\",ALL"
 
 simulation_options="-t ${time} -j ${job_name} --output ${slurm_logfile} -n ${nodes} -c ${cpus} -g ${gpus} -m ${mem}"
 simulation_options+=" --num_proc_per_gpu ${num_proc_per_gpu} --cmd sbatch --account ${account}"
@@ -235,6 +279,10 @@ fi
 
 if [[ ${hold} == "yes" ]]; then
   simulation_options+=" --hold"
+fi
+
+if [[ -n ${partition} ]]; then
+  simulation_options+=" -p ${partition}"
 fi
 
 if [[ ${test_mode} == yes ]]; then

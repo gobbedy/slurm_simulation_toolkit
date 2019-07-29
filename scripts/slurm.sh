@@ -61,6 +61,10 @@ OPTIONS
   --output LOGFILE
                           Logfile is the SLURM output filename.
 
+  -p PARTITION
+                          PARTITION is the name of the cluster partition to use. Default is no partition provided (aka
+                          use the system's default partition).
+
   -s, --test
                           Run slurm command in test mode. Command that *would* be run is printed
                           but job is not actually scheduled.
@@ -93,6 +97,7 @@ slurm_command=srun
 singleton=no
 blocking_job_id=''
 hold=''
+partition=''
 
 ########################################################################################################################
 ###################################### ARGUMENT PROCESSING AND CHECKING ################################################
@@ -168,6 +173,10 @@ while [[ $# -ne 0 ]]; do
       output_file=$2
       shift 2
     ;;
+    -p)
+      partition=$2
+      shift 2
+    ;;
     -s|--test)
       slurm_test_mode=yes
       shift 1
@@ -223,6 +232,10 @@ fi
 if [[ ${email} == "yes" ]]; then
   slurm_options+=" --mail-type=END --mail-user=${EMAIL} --signal=USR1@5"
   export+=",mail=yes"
+fi
+
+if [[ -n ${partition} ]]; then
+  slurm_options+=" -p ${partition}"
 fi
 
 if [[ ${slurm_test_mode} == "yes" ]]; then

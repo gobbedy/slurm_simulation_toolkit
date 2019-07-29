@@ -340,9 +340,7 @@ if [[ -n $(ls ${passed_batch_status_out_log}_* 2> /dev/null) ]]; then
         rm -f ${passed_manifest_list}_*
         successful=$(grep -cve '^\s*$' < ${passed_manifest_list})
     fi
-    cat ${results}_* > ${results}
     cat ${passed_batch_status_out_log}_* > ${passed_batch_status_out_log}
-        rm -f ${results}_*
 fi
 
 failed=0
@@ -398,7 +396,6 @@ if [[ ${successful} -gt 0 ]]; then
     elif [[ -n ${log_manifest_listing_file} ]]; then
         echo "MANIFESTS OF PASSED BATCHES: ${passed_manifest_list}"
     fi
-    echo "RESULTS OF PASSED/FAILED BATCHES: ${results}"
 fi
 if [[ ${failed} -gt 0 ]]; then
     if [[ -n ${reference_manifest} ]]; then
@@ -407,6 +404,13 @@ if [[ ${failed} -gt 0 ]]; then
         echo "MANIFESTS OF FAILED BATCHES: ${failed_manifest_list}"
     fi
 fi
+
+if [[ ${successful} -gt 0 ]] || [[ ${failed} -gt 0 ]]; then
+    cat ${results}_* > ${results}
+    rm -f ${results}_*
+    echo "RESULTS OF PASSED/FAILED BATCHES: ${results}"
+fi
+
 if [[ ${result_failed} -gt 0 ]]; then
     if [[ -n ${reference_manifest} ]]; then
         echo "HASHES OF FAILED BATCHES: ${result_failed_hash_manifest}"
