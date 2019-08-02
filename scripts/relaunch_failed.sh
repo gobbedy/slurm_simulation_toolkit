@@ -179,19 +179,19 @@ do
     cat ${new_job_manifest} >> ${new_jobs_manifest}
 
 
-    # get successful job manifest of original batch
-    exclude_list=($(grep -F -x -v -n -f ${parent_dir}/successful_manifest.txt ${batch_manifest} | cut -f1 -d:))
-    sed_exclude_option=`printf '%sd;' "${exclude_list[@]}"`
-    #sed -e ${sed_exclude_option} ${original_job_manifest} > ${parent_dir}/successful_job_manifest.txt
-    sed -e ${sed_exclude_option} ${batch_manifest} > ${parent_dir}/successful_manifest_ordered.txt
+    # get non-fail job manifest of original batch
+    exclude_list=($(grep -F -x -n -f ${fail_manifest} ${batch_manifest} | cut -f1 -d:))
 
-    grep -hoP 'Submitted batch job \K.+' $(sed 's/_proc_[0-9]\+\.log/.slurm/' ${parent_dir}/successful_manifest_ordered.txt | sort -u) > ${parent_dir}/successful_job_manifest.txt
+    sed_exclude_option=`printf '%sd;' "${exclude_list[@]}"`
+    sed -e ${sed_exclude_option} ${batch_manifest} > ${parent_dir}/non_fail_manifest.txt
+
+    grep -hoP 'Submitted batch job \K.+' $(sed 's/_proc_[0-9]\+\.log/.slurm/' ${parent_dir}/non_fail_manifest.txt | sort -u) > ${parent_dir}/non_fail_job_manifest.txt
 
     # cat batch_manifest and new manifest into new file
-    cat ${parent_dir}/successful_manifest_ordered.txt ${new_manifest} > ${composed_manifest}
+    cat ${parent_dir}/non_fail_manifest.txt ${new_manifest} > ${composed_manifest}
 
     # cat original (successful) job manifest and new job manifest into new file
-    cat ${parent_dir}/successful_job_manifest.txt ${new_job_manifest} > ${composed_job_manifest}
+    cat ${parent_dir}/non_fail_manifest.txt ${new_job_manifest} > ${composed_job_manifest}
 
     # keep the original job manifest
     mv ${original_job_manifest} ${original_job_manifest}.old_${datetime_suffix}
@@ -211,7 +211,7 @@ do
     #echo "UPDATED JOB MANIFEST:"
     #echo ${original_job_manifest}
 
-    rm ${parent_dir}/summary.log ${parent_dir}/successful_job_manifest.txt ${parent_dir}/successful_manifest_ordered.txt
+    rm ${parent_dir}/summary.log ${parent_dir}/non_fail_job_manifest.txt ${parent_dir}/non_fail_manifest.txt
 
 }&
 pid=$!

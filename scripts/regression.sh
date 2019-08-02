@@ -219,7 +219,7 @@ do
    # handle loop control commands
    if [[ ${line:0:1} == "@" ]]; then
        # remove inner whitespace
-       line="$(echo -e "${line}" | sed -e 's/[[:space:]]*//')"
+       line="$(echo -e "${line}" | sed -e 's/[[:space:]]//g')"
 
        # get loop variable names
        loop_iterator_name_list=($(echo ${line} | grep -oP '\w+(?=\[)'))
