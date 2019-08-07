@@ -300,6 +300,11 @@ unset pid_list
 declare -A pid_list
 start=`date +%s`
 echo "Releasing jobs..."
+
+if [[ ! -f ${new_jobs_manifest} ]]; then
+  die "No jobs to release. Are you sure there are any failed simulations to relaunch?"
+fi
+
 job_id_list=($(cat ${new_jobs_manifest}))
 for (( idx=0; idx<${#job_id_list[@]}; idx++ ));
 do

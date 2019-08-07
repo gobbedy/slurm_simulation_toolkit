@@ -43,6 +43,9 @@ OPTIONS
 
                           By default no checkpoints are passed to the user script.
 
+  --exclude EXCLUDE_NODE_LIST
+                          EXCLUDE_NODE_LIST is a comma-separated list of nodes to exclude.
+
   --hold
                           Jobs are submitted in held state. Can be used by parent script to impose a launch order
                           before releasing jobs.
@@ -154,6 +157,7 @@ max_jobs_in_parallel=''
 seed_list=''
 checkpoint_list=''
 partition=''
+exclude_node_list=''
 while [[ $# -ne 0 ]]; do
   #echo $1
   case "$1" in
@@ -181,6 +185,10 @@ while [[ $# -ne 0 ]]; do
     ;;
     --checkpoints)
       readarray -td, checkpoint_list <<<"$2"
+      shift 2
+    ;;
+    --exclude)
+      exclude_node_list=$2
       shift 2
     ;;
     --hold)
@@ -324,6 +332,9 @@ if [[ ${email} == yes ]]; then
 fi
 if [[ ${singleton} == 'yes' ]]; then
   job_script_options+=" --singleton"
+fi
+if [[ -n ${exclude_node_list} ]]; then
+  job_script_options+=" --exclude=${exclude_node_list}"
 fi
 if [[ ${hold} == "yes" ]]; then
   job_script_options+=" --hold"

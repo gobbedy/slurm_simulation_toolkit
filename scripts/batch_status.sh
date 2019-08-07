@@ -225,9 +225,6 @@ pid=$!
 pid_list[$i]=$pid
 done
 
-cat ${simulation_error_manifest}_* > ${simulation_error_manifest}
-rm -f ${simulation_error_manifest}_*
-
 error=0
 for (( i=0; i<$num_logs; i++ ));
 do
@@ -241,6 +238,11 @@ do
     fi
 }
 done
+
+if [[ -n "$(ls ${simulation_error_manifest}_*)" ]]; then
+    cat ${simulation_error_manifest}_* > ${simulation_error_manifest}
+    rm -f ${simulation_error_manifest}_*
+fi
 
 if [[ ${error} -ne 0 ]]; then
     die "sacct failed. See above error(s)."

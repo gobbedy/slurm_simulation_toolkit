@@ -37,6 +37,9 @@ OPTIONS
 
                           By default no checkpoints are passed to the user script.
 
+  --exclude EXCLUDE_NODE_LIST
+                          EXCLUDE_NODE_LIST is a comma-separated list of nodes to exclude.
+
   --hold
                           Jobs are submitted in held state. Can be used by parent script to impose a launch order
                           before releasing jobs.
@@ -115,6 +118,7 @@ seed_list_str=''
 checkpoint_list=''
 checkpoint_list_str=''
 partition=''
+exclude_node_list=''
 
 ########################################################################################################################
 ###################################### ARGUMENT PROCESSING AND CHECKING ################################################
@@ -144,6 +148,10 @@ while [[ $# -ne 0 ]]; do
       readarray -td, checkpoint_list <<<"$2"
       checkpoint_list_str=$(printf ":%s" "${checkpoint_list[@]}")
       checkpoint_list_str=${checkpoint_list_str:1}
+      shift 2
+    ;;
+    --exclude)
+      exclude_node_list=$2
       shift 2
     ;;
     --hold)
@@ -277,6 +285,10 @@ simulation_options="-t ${time} -j ${job_name} --output ${slurm_logfile} -n ${nod
 simulation_options+=" --num_proc_per_gpu ${num_proc_per_gpu} --cmd sbatch --account ${account}"
 if [[ ${email} == yes ]]; then
   simulation_options+=" --mail $EMAIL"
+fi
+
+if [[ -n ${exclude_node_list} ]]; then
+  simulation_options+=" --exclude=${exclude_node_list}"
 fi
 
 if [[ ${hold} == "yes" ]]; then

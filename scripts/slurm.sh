@@ -27,6 +27,9 @@ OPTIONS
   --cmd, --command COMMAND
                           COMMAND is the SLURM command to use: salloc, srun or sbatch. Default is salloc.
 
+  --exclude EXCLUDE_NODE_LIST
+                          EXCLUDE_NODE_LIST is a comma-separated list of nodes to exclude.
+
   -e, --export EXPORT
                           EXPORT is a comma-separated list of environment variables to be passed down to the sbatch
                           script (aka SCRIPT_NAME). eg 'a=2,str=\"hello\"'
@@ -103,6 +106,7 @@ partition=''
 ###################################### ARGUMENT PROCESSING AND CHECKING ################################################
 ########################################################################################################################
 script_name=''
+exclude_node_list=''
 while [[ $# -ne 0 ]]; do
   case "$1" in
     -h|--help)
@@ -126,6 +130,10 @@ while [[ $# -ne 0 ]]; do
     ;;
     --cmd|--command)
       slurm_command=$2
+      shift 2
+    ;;
+    --exclude)
+      exclude_node_list=$2
       shift 2
     ;;
     -e|--export)
@@ -234,6 +242,10 @@ if [[ ${email} == "yes" ]]; then
   export+=",mail=yes"
 fi
 
+if [[ -n ${exclude_node_list} ]]; then
+  slurm_options+=" --exclude=${exclude_node_list}"
+fi
+
 if [[ -n ${partition} ]]; then
   slurm_options+=" -p ${partition}"
 fi
@@ -277,7 +289,7 @@ fi
 if [[ ${slurm_command} == "salloc" ]]; then
   slurm_run_command="${slurm_command} ${slurm_options}"
 else
-  slurm_run_command="${slurm_command} ${slurm_options} --exclude=dell-gpu-12 --export=${export} ${script_name} ${child_args}"
+  slurm_run_command="${slurm_command} ${slurm_options} --export=${export} ${script_name} ${child_args}"
 fi
 
 echo "${me}: SUBMITTING THE FOLLOWING SLURM COMMAND on `date`:"
