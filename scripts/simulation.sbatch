@@ -59,7 +59,7 @@ for (( i=0; i<$num_proc_per_gpu; i++ ));
 do
 {
     gpu_process_logfile=$output_dir/${job_name}_proc_${i}.log
-    cp ${slurm_logfile} ${gpu_process_logfile}
+    cat ${slurm_logfile} >> ${gpu_process_logfile}
     echo "Launching ${script_path} on proc ${i}. Logfile:"
     echo ${gpu_process_logfile}
     export CUDA_VISIBLE_DEVICES=0

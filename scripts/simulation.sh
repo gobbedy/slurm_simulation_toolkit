@@ -263,6 +263,8 @@ mkdir -p ${output_dir}
 # This serves as a snapshotting of current code for later debugging (useful when running simultaneous sims)
 source_code_dir=$(dirname ${base_script})
 cp -rp ${source_code_dir}/* ${output_dir}
+# control file will be copied separately to regression_summary dir so no need to copy all of them
+rm -f ${output_dir}/*.ctrl
 base_script_copy="${output_dir}/$(basename ${base_script})"
 
 # full path to copied sbatch script

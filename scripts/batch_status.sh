@@ -113,7 +113,7 @@ echo
 # files used to summarize results
 slurm_error_manifest_unique=${batch_summary_dirname}/error_manifest_slurm.txt
 simulation_error_manifest=${batch_summary_dirname}/error_manifest.txt
-rm -f ${slurm_error_manifest_unique} ${simulation_error_manifest}
+rm -f ${slurm_error_manifest_unique} ${simulation_error_manifest} ${simulation_error_manifest}_*
 
 slurm_running_manifest_unique=${batch_summary_dirname}/running_manifest_slurm.txt
 simulation_running_manifest=${batch_summary_dirname}/running_manifest.txt
@@ -131,7 +131,6 @@ slurm_error_manifest=${batch_summary_dirname}/error_manifest.slurm
 slurm_running_manifest=${batch_summary_dirname}/running_manifest.slurm
 rm -f ${pending_counter_file} ${completed_counter_file} ${slurm_error_manifest} ${slurm_running_manifest}
 
-
 logfiles=($(cat ${log_manifest}))
 jobid_list=($(cat ${job_manifest}))
 num_logs="${#logfiles[@]}"
@@ -141,13 +140,15 @@ declare -a pid_list
 for (( i=0; i<$num_logs; i++ ));
 do
 {
+    zero_padded_idx=$(printf "%05d\n" ${i})
+
     logfile=${logfiles[$i]}
     slurm_logfile=$(ls $(dirname $logfile)/*slurm)
 
     sbatch_command_error=`grep 'sbatch: error' ${slurm_logfile}`
     if [[ -n ${sbatch_command_error} ]]; then
         echo ${slurm_logfile} >> ${slurm_error_manifest}
-        echo ${logfile} >> ${simulation_error_manifest}
+        echo ${logfile} >> ${simulation_error_manifest}_${zero_padded_idx}
         echo 1 >> ${completed_counter_file}
         continue
     fi
@@ -169,7 +170,7 @@ do
     job_failed=`echo $job_state | grep FAILED`
     if [[ -n ${job_failed} ]]; then
         echo ${slurm_logfile} >> ${slurm_error_manifest}
-        echo ${logfile} >> ${simulation_error_manifest}
+        echo ${logfile} >> ${simulation_error_manifest}_${zero_padded_idx}
         echo 1 >> ${completed_counter_file}
         continue
     fi
@@ -177,7 +178,7 @@ do
     job_cancelled=`echo $job_state | grep CANCELLED`
     if [[ -n ${job_cancelled} ]]; then
         echo ${slurm_logfile} >> ${slurm_error_manifest}
-        echo ${logfile} >> ${simulation_error_manifest}
+        echo ${logfile} >> ${simulation_error_manifest}_${zero_padded_idx}
         echo 1 >> ${completed_counter_file}
         continue
     fi
@@ -223,6 +224,9 @@ do
 pid=$!
 pid_list[$i]=$pid
 done
+
+cat ${simulation_error_manifest}_* > ${simulation_error_manifest}
+rm -f ${simulation_error_manifest}_*
 
 error=0
 for (( i=0; i<$num_logs; i++ ));

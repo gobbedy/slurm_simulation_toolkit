@@ -23,7 +23,8 @@ OPTIONS
                           provided.
 
   -l MANIFEST_LIST
-                          MANIFEST_LIST is a file containing a list of manifests (one per line).
+                          MANIFEST_LIST is a file containing a list of manifests (one per line). Only one manifest list
+                          file may be provided.
 
   --max_jobs_in_parallel MAX
                           Enforce a maximum of MAX jobs in parallel for the current regression. This is mainly useful
@@ -110,14 +111,16 @@ do
 {
     #echo ""
     echo "Processing ${batch_manifest}..."
-
     parent_dir=$(dirname ${batch_manifest})
     batch_cmd_file="${parent_dir}/batch_command.txt"
     batch_cmd=$(cat ${batch_cmd_file})
+    num_proc_per_gpu=$(grep -oP -- '--num_proc_per_gpu \K\d+' ${batch_cmd_file})
+    if [[ -z ${num_proc_per_gpu} ]]; then
+      num_proc_per_gpu=1
+    fi
 
     # get number of failed sims (aka number of simulations to run now)
     num_simulations=$(batch_status.sh -f $batch_manifest |& grep -oP 'Failed: \K\d+')
-
     if [[ ${num_simulations} -eq 0 ]]; then
         #echo "No failures. Skipping..."
         continue
@@ -125,33 +128,58 @@ do
     #echo "Relaunching ${num_simulations} failed simulations..."
 
     # check if simulations timed out
-
     # get failed sim seeds
     fail_manifest=${parent_dir}/error_manifest.txt
     seed_list_str=''
     for file in `cat $fail_manifest`; do
         seed_list_str+=","
+        seed=''
         if [[ -f ${file} ]]; then
-            seed=$(grep -oPhm 1 'seed \K\d+' ${file})
+            #seed=$(grep -oPhm 1 'seed \K\d+' ${file})
+            seed=$(grep -oP 'SEED \K\d+' ${file})
         fi
         #seed=$(grep -oPh 'SEED \K\d+' ${file})
         seed_list_str+=$seed
     done
     seed_list_str=${seed_list_str:1}
 
+#    slurm_fail_manifest=${parent_dir}/error_manifest_slurm.txt
+#    checkpoint_list_str=''
+#    for slurm_logfile in `cat $slurm_fail_manifest`; do
+#        checkpoint_list_str+=","
+#        sim_dir=$(dirname ${slurm_logfile})
+#        time_limit_reached=$(grep 'DUE TO TIME LIMIT' ${slurm_logfile})
+#        checkpoints=''
+#        if [[ -n ${time_limit_reached} ]]; then
+#            checkpoints=$(ls ${sim_dir}/*checkpoint* | tr [:space:] ',')
+#        else
+#            checkpoints=$(printf ',%.0s' $(seq 1 $num_proc_per_gpu))
+#        fi
+#        if [[ -n ${checkpoints} ]]; then
+#            checkpoints=${checkpoints::-1}
+#        fi
+#        checkpoint_list_str+=${checkpoints}
+#    done
+#    checkpoint_list_str=${checkpoint_list_str:1}
+
+    #slurm_fail_manifest=${parent_dir}/error_manifest_slurm.txt
     checkpoint_list_str=''
     for file in `cat $fail_manifest`; do
         checkpoint_list_str+=","
         sim_dir=$(dirname ${file})
-        slurm_logfile=$(ls ${sim_dir}/*slurm)
+        slurm_logfile=${sim_dir}/*.slurm
         time_limit_reached=$(grep 'DUE TO TIME LIMIT' ${slurm_logfile})
         checkpoint=''
         if [[ -n ${time_limit_reached} ]]; then
-            checkpoint=$(ls ${sim_dir}/*checkpoint*)
+            seed=$(grep -oP 'SEED \K\d+' ${file})
+            checkpoint=${sim_dir}/checkpoint_${seed}.torch
         fi
         checkpoint_list_str+=${checkpoint}
     done
     checkpoint_list_str=${checkpoint_list_str:1}
+
+    # escape forward slashes for upcoming sed expression
+    checkpoint_list_str=$(echo $checkpoint_list_str  | sed -e 's/\//\\\//g')
 
     # replace --num_simulations with appriopriate $num_simulations
     new_batch_cmd=$(echo "${batch_cmd}" | sed -e "s/--num_simulations [0-9]\+/--num_simulations ${num_simulations} --seeds ${seed_list_str} --checkpoints ${checkpoint_list_str}/g")
@@ -160,10 +188,30 @@ do
     #new_batch_cmd=${new_batch_cmd//--hold/}
 
     # launch new regression
-    eval "${new_batch_cmd}" |tee ${parent_dir}/summary.log
+    eval "${new_batch_cmd}" > ${parent_dir}/summary.log
 
     # get new manifest
     new_manifest=$(grep -oP 'SIMULATION LOGS MANIFEST: \K.+' ${parent_dir}/summary.log)
+
+    fail_list=($(cat $fail_manifest))
+    new_list=($(cat $new_manifest))
+    for (( i=0; i<${num_simulations}; i++ ));
+    do
+    {
+        fail_log=${fail_list[$i]}
+        new_log=${new_list[$i]}
+
+
+        old_sim_dir=$(dirname ${fail_log})
+        old_slurm_logfile=${old_sim_dir}/*.slurm
+        time_limit_reached=$(grep 'DUE TO TIME LIMIT' ${old_slurm_logfile})
+        if [[ -n ${time_limit_reached} ]]; then
+            # copy fail_log until the last "Checkpoint Saving" to new_log
+            checkpoint_line=$(grep -n 'Checkpoint Saving' ${fail_log} | tail -1 | grep -oP '^\d+')
+            sed -n "1,${checkpoint_line}p" ${fail_log} > ${new_log}
+        fi
+    }
+    done
 
     # get original job manifest
     original_job_manifest="${parent_dir}/job_manifest.txt"
@@ -178,20 +226,29 @@ do
     new_job_manifest=$(grep -oP 'JOB IDs FILE IN: \K.+' ${parent_dir}/summary.log)
     cat ${new_job_manifest} >> ${new_jobs_manifest}
 
-
     # get non-fail job manifest of original batch
     exclude_list=($(grep -F -x -n -f ${fail_manifest} ${batch_manifest} | cut -f1 -d:))
 
     sed_exclude_option=`printf '%sd;' "${exclude_list[@]}"`
     sed -e ${sed_exclude_option} ${batch_manifest} > ${parent_dir}/non_fail_manifest.txt
 
-    grep -hoP 'Submitted batch job \K.+' $(sed 's/_proc_[0-9]\+\.log/.slurm/' ${parent_dir}/non_fail_manifest.txt | sort -u) > ${parent_dir}/non_fail_job_manifest.txt
+    if [[ -s ${parent_dir}/non_fail_manifest.txt ]]; then
 
-    # cat batch_manifest and new manifest into new file
-    cat ${parent_dir}/non_fail_manifest.txt ${new_manifest} > ${composed_manifest}
+      grep -hoP 'Submitted batch job \K.+' $(sed 's/_proc_[0-9]\+\.log/.slurm/' ${parent_dir}/non_fail_manifest.txt | sort -u) > ${parent_dir}/non_fail_job_manifest.txt
 
-    # cat original (successful) job manifest and new job manifest into new file
-    cat ${parent_dir}/non_fail_manifest.txt ${new_job_manifest} > ${composed_job_manifest}
+      # cat batch_manifest and new manifest into new file
+      cat ${parent_dir}/non_fail_manifest.txt ${new_manifest} > ${composed_manifest}
+
+    else
+      cp ${new_manifest} ${composed_manifest}
+    fi
+
+    if [[ -s ${parent_dir}/non_fail_job_manifest.txt ]]; then
+      # cat original (successful) job manifest and new job manifest into new file
+      cat ${parent_dir}/non_fail_job_manifest.txt ${new_job_manifest} > ${composed_job_manifest}
+    else
+      cp ${new_job_manifest} ${composed_job_manifest}
+    fi
 
     # keep the original job manifest
     mv ${original_job_manifest} ${original_job_manifest}.old_${datetime_suffix}
@@ -211,11 +268,11 @@ do
     #echo "UPDATED JOB MANIFEST:"
     #echo ${original_job_manifest}
 
-    rm ${parent_dir}/summary.log ${parent_dir}/non_fail_job_manifest.txt ${parent_dir}/non_fail_manifest.txt
-
-}&
-pid=$!
-pid_list[$pid]=1
+    rm -f ${parent_dir}/summary.log ${parent_dir}/non_fail_job_manifest.txt ${parent_dir}/non_fail_manifest.txt
+}
+#&
+#pid=$!
+#pid_list[$pid]=1
 done
 
 process_error=0

@@ -54,7 +54,7 @@ OPTIONS
                           Default is 'dat' as of writing this, but should be changed on a per-project basis.
 
   --mail EMAIL
-                          Send user e-mail when jobs ends. Sends e-mail to EMAIL
+                          Send user e-mail when EVERY job ends. Sends e-mail to EMAIL.
 
   --max_jobs_in_parallel MAX
                           Enforce a maximum of MAX jobs in parallel for the current regression. This is mainly useful
@@ -340,6 +340,8 @@ declare -a pid_list
 for (( i=0; i<$num_jobs; i++ ));
 do
 {
+   zero_padded_idx=$(printf "%05d\n" ${i})
+
    job_unique_options=''
    if [[ "${#blocking_jobs[@]}" -gt 0 ]]; then
        job_unique_options+=" --wait_for_job ${blocking_jobs[$i]}"
@@ -360,16 +362,16 @@ do
    fi
 
    job_unique_options+=" --job_name ${job_name}"
-   ${simulation_executable} ${job_script_options} ${job_unique_options} -- ${child_args} &> ${regression_slurm_commands_file}_${i}
+   ${simulation_executable} ${job_script_options} ${job_unique_options} -- ${child_args} &> ${regression_slurm_commands_file}_${zero_padded_idx}
    if [[ $? -ne 0 ]]; then
-       die "${simulation_executable} failed. See ${regression_slurm_commands_file}_${i}"
+       die "${simulation_executable} failed. See ${regression_slurm_commands_file}_${zero_padded_idx}"
    fi
 
-   slurm_logfile=$(grep -oP '(?<=--output=)[^ ]+' ${regression_slurm_commands_file}_${i})
-   echo ${slurm_logfile} > ${regression_slurm_logname_file}_${i}
-   job_number=$(grep "Submitted" ${regression_slurm_commands_file}_${i} | grep -oP '\d+$')
+   slurm_logfile=$(grep -oP '(?<=--output=)[^ ]+' ${regression_slurm_commands_file}_${zero_padded_idx})
+   echo ${slurm_logfile} > ${regression_slurm_logname_file}_${zero_padded_idx}
+   job_number=$(grep "Submitted" ${regression_slurm_commands_file}_${zero_padded_idx} | grep -oP '\d+$')
    if [[ -z ${job_number} ]]; then
-       die "Job number not found. ${simulation_executable} likely failed. See ${regression_slurm_commands_file}_${i}"
+       die "Job number not found. ${simulation_executable} likely failed. See ${regression_slurm_commands_file}_${zero_padded_idx}"
    fi
 
    for (( j=0; j<$num_proc_per_gpu; j++ )); do
@@ -378,10 +380,10 @@ do
       gpu_number=${j}
       log_basename="${slurm_logbasename%.*}_proc_${gpu_number}.log"
       logfile=$slurm_logdirname/${log_basename}
-      echo ${logfile} >> ${regression_logname_file}_${i}
+      echo ${logfile} >> ${regression_logname_file}_${zero_padded_idx}
    done
 
-   echo ${job_number} > ${regression_job_numbers_file}_${i}
+   echo ${job_number} > ${regression_job_numbers_file}_${zero_padded_idx}
 }&
 pid=$!
 pid_list[$i]=$pid
