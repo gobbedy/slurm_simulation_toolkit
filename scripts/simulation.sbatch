@@ -48,10 +48,22 @@ if [[ -n ${seeds} ]]; then
     #seed_list=($(echo "${seeds}" | tr ':' '\n'))
     #IFS=':' eval 'seed_list=($2)'
     readarray -td: seed_list <<<"${seeds}"
+
+    #temporary workaround on compute canada since readarray '-d' doesn't work
+    if [[ ! "${seeds}" =~ "," ]]; then
+        seed_list=${seeds}
+    else
+        readarray -t:, seed_list <<<"${seeds}"
+    fi
 fi
 
 if [[ -n ${checkpoints} ]]; then
-    readarray -td: checkpoint_list <<<"${checkpoints}"
+    #temporary workaround on compute canada since readarray '-d' doesn't work
+    if [[ ! ${checkpoints} =~ "," ]]; then
+        checkpoint_list=${checkpoints}
+    else
+        readarray -td, checkpoint_list <<<"${checkpoints}"
+    fi
 fi
 
 declare -a pid_list

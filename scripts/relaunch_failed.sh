@@ -269,10 +269,9 @@ do
     #echo ${original_job_manifest}
 
     rm -f ${parent_dir}/summary.log ${parent_dir}/non_fail_job_manifest.txt ${parent_dir}/non_fail_manifest.txt
-}
-#&
-#pid=$!
-#pid_list[$pid]=1
+}&
+pid=$!
+pid_list[$pid]=1
 done
 
 process_error=0

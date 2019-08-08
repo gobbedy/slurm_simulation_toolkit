@@ -145,7 +145,12 @@ while [[ $# -ne 0 ]]; do
       shift 2
     ;;
     --checkpoints)
-      readarray -td, checkpoint_list <<<"$2"
+      #temporary workaround on compute canada since readarray '-d' doesn't work
+      if [[ ! $2 =~ "," ]]; then
+          checkpoint_list=$2
+      else
+          readarray -td, checkpoint_list <<<"$2"
+      fi
       checkpoint_list_str=$(printf ":%s" "${checkpoint_list[@]}")
       checkpoint_list_str=${checkpoint_list_str:1}
       shift 2
@@ -206,7 +211,13 @@ while [[ $# -ne 0 ]]; do
     --seeds)
       #seed_list=($(echo "$2" | tr ',' '\n'))
       #IFS=',' eval 'seed_list=($2)'
-      readarray -td, seed_list <<<"$2"
+
+      #temporary workaround on compute canada since readarray '-d' doesn't work
+      if [[ ! $2 =~ "," ]]; then
+          seed_list=$2
+      else
+          readarray -td, seed_list <<<"$2"
+      fi
       seed_list_str=$(printf ":%s" "${seed_list[@]}")
       seed_list_str=${seed_list_str:1}
       shift 2
