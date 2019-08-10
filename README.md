@@ -25,7 +25,7 @@ Please open an issue if you find a bug or notice that the toolkit does not behav
 
 ## Introduction
 
-This toolkit provides an automated command-line workflow for launching SLURM job regression tests (```
+This toolkit provides an automated command-line workflow for launching SLURM job regression tests (```regression.sh
 ```), monitoring these regressions (```regression_status.sh```), and post-processing regression logs to summarize results (using a custom hook in ```regression_status.sh```).
 
 The term 'regression' is short for 'regression test', which is a software industry term meaning a suite of tests used to verify code performance (see wikpedia's [Regression Testing page](https://en.wikipedia.org/wiki/Regression_testing)).
