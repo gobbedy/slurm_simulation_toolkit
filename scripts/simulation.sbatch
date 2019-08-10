@@ -60,7 +60,7 @@ fi
 if [[ -n ${checkpoints} ]]; then
     #temporary workaround on compute canada since readarray '-d' doesn't work
     if [[ ! ${checkpoints} =~ "," ]]; then
-        checkpoint_list=${checkpoints}
+        checkpoint_list=(${checkpoints})
     else
         readarray -td, checkpoint_list <<<"${checkpoints}"
     fi

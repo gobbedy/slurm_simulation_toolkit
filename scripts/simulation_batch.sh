@@ -187,7 +187,7 @@ while [[ $# -ne 0 ]]; do
 
       #temporary workaround on compute canada since readarray '-d' doesn't work
       if [[ ! $2 =~ "," ]]; then
-          checkpoint_list=$2
+          checkpoint_list=($2)
       else
           readarray -td, checkpoint_list <<<"$2"
       fi

@@ -131,12 +131,14 @@ do
     # get failed sim seeds
     fail_manifest=${parent_dir}/error_manifest.txt
     seed_list_str=''
+    seed_found=''
     for file in `cat $fail_manifest`; do
         seed_list_str+=","
         seed=''
         if [[ -f ${file} ]]; then
             #seed=$(grep -oPhm 1 'seed \K\d+' ${file})
-            seed=$(grep -oP 'SEED \K\d+' ${file})
+            seed=$(grep -oPm 1 'SEED \K\d+' ${file})
+            seed_found='yes'
         fi
         #seed=$(grep -oPh 'SEED \K\d+' ${file})
         seed_list_str+=$seed
@@ -164,6 +166,7 @@ do
 
     #slurm_fail_manifest=${parent_dir}/error_manifest_slurm.txt
     checkpoint_list_str=''
+    time_limit_failure=''
     for file in `cat $fail_manifest`; do
         checkpoint_list_str+=","
         sim_dir=$(dirname ${file})
@@ -171,8 +174,9 @@ do
         time_limit_reached=$(grep 'DUE TO TIME LIMIT' ${slurm_logfile})
         checkpoint=''
         if [[ -n ${time_limit_reached} ]]; then
-            seed=$(grep -oP 'SEED \K\d+' ${file})
+            seed=$(grep -oPm 1 'SEED \K\d+' ${file})
             checkpoint=${sim_dir}/checkpoint_${seed}.torch
+            time_limit_failure='yes'
         fi
         checkpoint_list_str+=${checkpoint}
     done
@@ -181,8 +185,16 @@ do
     # escape forward slashes for upcoming sed expression
     checkpoint_list_str=$(echo $checkpoint_list_str  | sed -e 's/\//\\\//g')
 
+    new_args="--num_simulations ${num_simulations}"
+    if [[ ${seed_found} ]]; then
+      new_args+=" --seeds ${seed_list_str}"
+    fi
+    if [[ ${time_limit_failure} ]]; then
+      new_args+=" --checkpoints ${checkpoint_list_str}"
+    fi
+
     # replace --num_simulations with appriopriate $num_simulations
-    new_batch_cmd=$(echo "${batch_cmd}" | sed -e "s/--num_simulations [0-9]\+/--num_simulations ${num_simulations} --seeds ${seed_list_str} --checkpoints ${checkpoint_list_str}/g")
+    new_batch_cmd=$(echo "${batch_cmd}" | sed -e "s/--num_simulations [0-9]\+/${new_args}/g")
 
     # remove --hold
     #new_batch_cmd=${new_batch_cmd//--hold/}
@@ -233,9 +245,7 @@ do
     sed -e ${sed_exclude_option} ${batch_manifest} > ${parent_dir}/non_fail_manifest.txt
 
     if [[ -s ${parent_dir}/non_fail_manifest.txt ]]; then
-
       grep -hoP 'Submitted batch job \K.+' $(sed 's/_proc_[0-9]\+\.log/.slurm/' ${parent_dir}/non_fail_manifest.txt | sort -u) > ${parent_dir}/non_fail_job_manifest.txt
-
       # cat batch_manifest and new manifest into new file
       cat ${parent_dir}/non_fail_manifest.txt ${new_manifest} > ${composed_manifest}
 
