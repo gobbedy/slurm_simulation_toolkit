@@ -18,6 +18,11 @@ OPTIONS
   -h, --help
                           Show this description
 
+  --exclude EXCLUDE_NODE_LIST
+                          EXCLUDE_NODE_LIST is a comma-separated list of nodes to exclude. If also provided at the
+                          regression control file level, the regression control file argument takes precendence. If also
+                          provided at the batch command level, the regression control file argument takes precendence.
+
   -f MANIFEST
                           MANIFEST is a file containing a list of logfiles to process. Only one manifest file may be
                           provided.
@@ -60,11 +65,16 @@ manifest_list=()
 manifest_list_file=''
 max_jobs_in_parallel=''
 preserve_order=''
+exclude_node_list=''
 while [[ "$1" == -* ]]; do
   case "$1" in
     -h|--help)
       showHelp
       exit 0
+    ;;
+    --exclude)
+      exclude_node_list=$2
+      shift 2
     ;;
      -f)
       manifest_list+=($2)
@@ -99,32 +109,67 @@ if [[ -n ${manifest_list_file} ]]; then
 else
     regress_summary_dir=$PWD
 fi
-new_jobs_manifest=${regress_summary_dir}/new_job_manifest.txt
-rm -f ${new_jobs_manifest}
+new_jobs_manifest=${regress_summary_dir}/job_manifest_${datetime_suffix}.txt
+new_logs_manifest=${regress_summary_dir}/log_manifest_${datetime_suffix}.txt
+num_relaunched_manifest=${regress_summary_dir}/num_relaunched_${datetime_suffix}.txt
+batch_status_manifest=${regress_summary_dir}/batch_status_${datetime_suffix}.txt
+summary_logfile=${regress_summary_dir}/summary_${datetime_suffix}.log
+batch_outputs_logfile=${regress_summary_dir}/batch_outputs_${datetime_suffix}.log
 
 unset pid_list
 declare -A pid_list
 start=`date +%s`
 echo "Relaunching failed jobs..."
-for batch_manifest in "${manifest_list[@]}"
+#echo "${manifest_list[@]}"
+#exit
+#for batch_manifest in "${manifest_list[@]}"
+#do
+#{
+
+for (( idx=0; idx<${#manifest_list[@]}; idx++ ));
 do
 {
+
+    batch_manifest=${manifest_list[${idx}]}
+    zero_padded_idx=$(printf "%05d\n" ${idx})
+
     #echo ""
-    echo "Processing ${batch_manifest}..."
+    #echo "Processing ${batch_manifest}..."
     parent_dir=$(dirname ${batch_manifest})
     batch_cmd_file="${parent_dir}/batch_command.txt"
     batch_cmd=$(cat ${batch_cmd_file})
     num_proc_per_gpu=$(grep -oP -- '--num_proc_per_gpu \K\d+' ${batch_cmd_file})
     if [[ -z ${num_proc_per_gpu} ]]; then
-      num_proc_per_gpu=1
+        num_proc_per_gpu=1
     fi
 
     # get number of failed sims (aka number of simulations to run now)
-    num_simulations=$(batch_status.sh -f $batch_manifest |& grep -oP 'Failed: \K\d+')
+    batch_status.sh -f $batch_manifest &> ${batch_status_manifest}_${zero_padded_idx}
+    return_code=$?
+
+    # batch status script failed
+    num_fail=0
+    while [[ ${return_code} -eq 1 ]]; do
+        # retry
+        echo "batch_status.sh failed. Retrying..."
+        batch_status.sh -f $batch_manifest &> ${batch_status_manifest}_${zero_padded_idx}
+        return_code=$?
+        if [[ ${return_code} -eq 1 ]]; then
+            num_fail=$((num_fail+1))
+            if [[ ${num_fail} -eq 5 ]]; then
+                die "batch_status.sh failed. See errors in ${batch_status_manifest}_${zero_padded_idx}"
+            fi
+        fi
+    done
+
+    num_simulations=$(grep -oP 'Failed: \K\d+' ${batch_status_manifest}_${zero_padded_idx})
+    #num_simulations=$(batch_status.sh -f $batch_manifest |& grep -oP 'Failed: \K\d+')
     if [[ ${num_simulations} -eq 0 ]]; then
         #echo "No failures. Skipping..."
         continue
     fi
+    echo "Relaunching $num_simulations for ${batch_manifest}"
+    echo $num_simulations >> ${num_relaunched_manifest}
     #echo "Relaunching ${num_simulations} failed simulations..."
 
     # check if simulations timed out
@@ -166,18 +211,21 @@ do
 
     #slurm_fail_manifest=${parent_dir}/error_manifest_slurm.txt
     checkpoint_list_str=''
-    time_limit_failure=''
+    checkpoint_found=''
     for file in `cat $fail_manifest`; do
         checkpoint_list_str+=","
         sim_dir=$(dirname ${file})
         slurm_logfile=${sim_dir}/*.slurm
-        time_limit_reached=$(grep 'DUE TO TIME LIMIT' ${slurm_logfile})
+        #time_limit_reached=$(grep 'DUE TO TIME LIMIT' ${slurm_logfile})
         checkpoint=''
-        if [[ -n ${time_limit_reached} ]]; then
-            seed=$(grep -oPm 1 'SEED \K\d+' ${file})
-            checkpoint=${sim_dir}/checkpoint_${seed}.torch
-            time_limit_failure='yes'
+        #if [[ -n ${time_limit_reached} ]]; then
+        seed=$(grep -oPm 1 'SEED \K\d+' ${file})
+        checkpoint_file=${sim_dir}/checkpoint_${seed}.torch
+        if [[ -s ${checkpoint_file} ]]; then
+            checkpoint=${checkpoint_file}
+            checkpoint_found='yes'
         fi
+        #fi
         checkpoint_list_str+=${checkpoint}
     done
     checkpoint_list_str=${checkpoint_list_str:1}
@@ -189,8 +237,13 @@ do
     if [[ ${seed_found} ]]; then
       new_args+=" --seeds ${seed_list_str}"
     fi
-    if [[ ${time_limit_failure} ]]; then
+    if [[ ${checkpoint_found} ]]; then
       new_args+=" --checkpoints ${checkpoint_list_str}"
+    fi
+    if [[ ! "${batch_cmd}" =~ "--exclude" ]]; then
+        if [[ -n ${exclude_node_list} ]]; then
+            new_args+=" --exclude ${exclude_node_list}"
+        fi
     fi
 
     # replace --num_simulations with appriopriate $num_simulations
@@ -200,10 +253,27 @@ do
     #new_batch_cmd=${new_batch_cmd//--hold/}
 
     # launch new regression
-    eval "${new_batch_cmd}" > ${parent_dir}/summary.log
+    eval "${new_batch_cmd}" &> ${batch_outputs_logfile}_${zero_padded_idx}
+    return_code=$?
+
+    # batch status script failed
+    num_fail=0
+    while [[ ${return_code} -eq 1 ]]; do
+        # retry
+        echo "\"${new_batch_cmd}\" failed. Retrying..."
+        eval "${new_batch_cmd}" &> ${batch_outputs_logfile}_${zero_padded_idx}
+        return_code=$?
+        if [[ ${return_code} -eq 1 ]]; then
+            num_fail=$((num_fail+1))
+            if [[ ${num_fail} -eq 3 ]]; then
+                die "\"${new_batch_cmd}\" failed. See ${batch_outputs_logfile}_${zero_padded_idx}"
+            fi
+        fi
+    done
 
     # get new manifest
-    new_manifest=$(grep -oP 'SIMULATION LOGS MANIFEST: \K.+' ${parent_dir}/summary.log)
+    new_manifest=$(grep -oP 'SIMULATION LOGS MANIFEST: \K.+' ${batch_outputs_logfile}_${zero_padded_idx})
+    cat ${new_manifest} >> ${new_logs_manifest}
 
     fail_list=($(cat $fail_manifest))
     new_list=($(cat $new_manifest))
@@ -215,9 +285,9 @@ do
 
 
         old_sim_dir=$(dirname ${fail_log})
-        old_slurm_logfile=${old_sim_dir}/*.slurm
-        time_limit_reached=$(grep 'DUE TO TIME LIMIT' ${old_slurm_logfile})
-        if [[ -n ${time_limit_reached} ]]; then
+        seed=$(grep -oPm 1 'SEED \K\d+' ${fail_log})
+        checkpoint_file=${old_sim_dir}/checkpoint_${seed}.torch
+        if [[ -s ${checkpoint_file} ]]; then
             # copy fail_log until the last "Checkpoint Saving" to new_log
             checkpoint_line=$(grep -n 'Checkpoint Saving' ${fail_log} | tail -1 | grep -oP '^\d+')
             sed -n "1,${checkpoint_line}p" ${fail_log} > ${new_log}
@@ -235,7 +305,7 @@ do
     composed_job_manifest="${original_job_manifest%.*}_FULL.txt"
 
     # get new job manifest
-    new_job_manifest=$(grep -oP 'JOB IDs FILE IN: \K.+' ${parent_dir}/summary.log)
+    new_job_manifest=$(grep -oP 'JOB IDs FILE IN: \K.+' ${batch_outputs_logfile}_${zero_padded_idx})
     cat ${new_job_manifest} >> ${new_jobs_manifest}
 
     # get non-fail job manifest of original batch
@@ -278,7 +348,7 @@ do
     #echo "UPDATED JOB MANIFEST:"
     #echo ${original_job_manifest}
 
-    rm -f ${parent_dir}/summary.log ${parent_dir}/non_fail_job_manifest.txt ${parent_dir}/non_fail_manifest.txt
+    rm -f ${parent_dir}/non_fail_job_manifest.txt ${parent_dir}/non_fail_manifest.txt
 }&
 pid=$!
 pid_list[$pid]=1
@@ -299,6 +369,11 @@ if [[ ${process_error} -gt 0 ]]; then
     die "Job relaunching failed. See above error(s)."
 fi
 
+cat ${batch_status_manifest}_* > ${batch_status_manifest}
+rm ${batch_status_manifest}_*
+
+cat ${batch_outputs_logfile}_* > ${batch_outputs_logfile}
+rm ${batch_outputs_logfile}_*
 
 end=`date +%s`
 runtime=$((end-start))
@@ -377,5 +452,17 @@ runtime=$((end-start))
 echo "Releasing took $runtime seconds"
 echo ""
 
+num_sims_relaunched=$(paste -sd+ ${num_relaunched_manifest} | bc)
 
-rm ${new_jobs_manifest}
+echo "RELAUNCHED ${num_sims_relaunched} failed simulations" |tee -a ${summary_logfile}
+echo ""
+
+echo "SUMMARY FILES:"
+echo "BATCH SCRIPT OUTPUT LOGFILE: $(readlink -f ${batch_outputs_logfile})" |tee -a ${summary_logfile}
+echo "JOB ID MANIFEST OF NEW JOBS LAUNCHED: ${new_jobs_manifest}" |tee -a ${summary_logfile}
+echo "LOG MANIFEST OF NEW JOBS LAUNCHED: ${new_logs_manifest}" |tee -a ${summary_logfile}
+echo "BATCH STATUS OUTPUT LOGFILE: $(readlink -f ${batch_status_manifest})" |tee -a ${summary_logfile}
+echo ""
+echo "ABOVE SUMMARY: ${summary_logfile}"
+
+#TODO: add manifest of new batch manifests + other ones in regression.sh

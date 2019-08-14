@@ -127,10 +127,12 @@ rm -f ${pending_sim_cnt_file}_* ${running_sim_cnt_file}_* ${passed_sim_cnt_file}
 rm -f ${pending_sim_cnt_file} ${running_sim_cnt_file} ${passed_sim_cnt_file} ${failed_sim_cnt_file}
 rm -f ${result_failed_sim_cnt_file}_* ${result_failed_sim_cnt_file}
 
+pending_sim_manifest=${regression_summary_dir}/pending_sim_manifest.txt
 running_sim_manifest=${regression_summary_dir}/running_sim_manifest.txt
 passing_sim_manifest=${regression_summary_dir}/passing_sim_manifest.txt
 failing_sim_manifest=${regression_summary_dir}/failing_sim_manifest.txt
 result_failing_sim_manifest=${regression_summary_dir}/result_failing_sim_manifest.txt
+rm -f ${pending_sim_manifest}_* ${pending_sim_manifest}
 rm -f ${running_sim_manifest}_* ${passing_sim_manifest}_* ${failing_sim_manifest}_* ${result_failing_sim_manifest}_*
 rm -f ${running_sim_manifest} ${passing_sim_manifest} ${failing_sim_manifest} ${result_failing_sim_manifest}
 
@@ -171,6 +173,10 @@ do
 
     if [[ -f ${batch_summary_dir}/error_manifest.txt ]]; then
         cat ${batch_summary_dir}/error_manifest.txt > ${failing_sim_manifest}_${zero_padded_idx}
+    fi
+
+    if [[ -f ${batch_summary_dir}/pending_manifest.txt ]]; then
+        cat ${batch_summary_dir}/pending_manifest.txt > ${pending_sim_manifest}_${zero_padded_idx}
     fi
 
     if [[ -f ${batch_summary_dir}/running_manifest.txt ]]; then
@@ -295,10 +301,12 @@ result_failed_sims=$(paste -sd+ ${result_failed_sim_cnt_file} | bc)
 rm -f ${pending_sim_cnt_file} ${running_sim_cnt_file} ${passed_sim_cnt_file} ${failed_sim_cnt_file}
 rm -f ${result_failed_sim_cnt_file}
 
+cat ${pending_sim_manifest}_* > ${pending_sim_manifest} 2> /dev/null
 cat ${running_sim_manifest}_* > ${running_sim_manifest} 2> /dev/null
 cat ${passing_sim_manifest}_* > ${passing_sim_manifest} 2> /dev/null
 cat ${failing_sim_manifest}_* > ${failing_sim_manifest} 2> /dev/null
 cat ${result_failing_sim_manifest}_* > ${result_failing_sim_manifest} 2> /dev/null
+rm -f ${pending_sim_manifest}_*
 rm -f ${running_sim_manifest}_* ${passing_sim_manifest}_* ${failing_sim_manifest}_* ${result_failing_sim_manifest}_*
 
 pending=0
@@ -376,6 +384,7 @@ rm -f ${batch_status_output_log}_* ${pending_batch_status_out_log}_* ${running_b
 rm -f ${passed_batch_status_out_log}_* ${failed_batch_status_out_log}_* ${result_failed_batch_status_out_log}_*
 
 echo "REGRESSION SUMMARY DIR: ${regression_summary_dir}"
+echo "BATCH STATUS LOGFILE: ${batch_status_output_log}"
 echo "----------------------------------------------------------------------------------------------"
 echo "BATCHES:"
 echo "PENDING: ${pending}"
@@ -383,6 +392,13 @@ echo "RUNNING: ${running}"
 echo "PASSED: ${successful}"
 echo "FAILED: ${failed}"
 echo "RESULT FAILED: ${result_failed}"
+if [[ ${pending} -gt 0 ]]; then
+    if [[ -n ${reference_manifest} ]]; then
+        echo "HASHES OF PENDING BATCHES: ${pending_hash_manifest}"
+    elif [[ -n ${log_manifest_listing_file} ]]; then
+        echo "MANIFESTS OF PENDING BATCHES: ${pending_manifest_list}"
+    fi
+fi
 if [[ ${running} -gt 0 ]]; then
     if [[ -n ${reference_manifest} ]]; then
         echo "HASHES OF RUNNING BATCHES: ${running_hash_manifest}"
@@ -426,6 +442,9 @@ echo "RUNNING: ${running_sims}"
 echo "PASSED: ${successful_sims}"
 echo "FAILED: ${failed_sims}"
 echo "RESULT FAILED (double counts passed/failed): ${result_failed_sims}"
+if [[ ${pending_sims} -gt 0 ]]; then
+    echo "MANIFEST OF PENDING SIMS: ${pending_sim_manifest}"
+fi
 if [[ ${running_sims} -gt 0 ]]; then
     echo "MANIFEST OF RUNNING SIMS: ${running_sim_manifest}"
 fi

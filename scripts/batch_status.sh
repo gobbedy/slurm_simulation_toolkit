@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
 source ${SLURM_SIMULATION_TOOLKIT_HOME}/config/simulation_toolkit.rc
 
-custom_processing_functions=''
-if [[ -f ${SLURM_SIMULATION_TOOLKIT_RESULTS_PROCESSING_FUNCTIONS} ]]; then
-    source ${SLURM_SIMULATION_TOOLKIT_RESULTS_PROCESSING_FUNCTIONS}
-    custom_processing_functions='yes'
-fi
-
 function showHelp {
 
 echo "NAME
@@ -117,19 +111,25 @@ rm -f ${slurm_error_manifest_unique} ${simulation_error_manifest} ${simulation_e
 
 slurm_running_manifest_unique=${batch_summary_dirname}/running_manifest_slurm.txt
 simulation_running_manifest=${batch_summary_dirname}/running_manifest.txt
-rm -f ${slurm_running_manifest_unique} ${simulation_running_manifest}
+rm -f ${slurm_running_manifest_unique} ${simulation_running_manifest} ${simulation_running_manifest}_*
+
+slurm_pending_manifest_unique=${batch_summary_dirname}/pending_manifest_slurm.txt
+simulation_pending_manifest=${batch_summary_dirname}/pending_manifest.txt
+rm -f ${slurm_pending_manifest_unique} ${simulation_pending_manifest} ${simulation_pending_manifest}_*
 
 duration_successful_manifest=${batch_summary_dirname}/durations.txt
 slurm_successful_manifest_unique=${batch_summary_dirname}/successful_manifest_slurm.txt
 simulation_successful_manifest=${batch_summary_dirname}/successful_manifest.txt
 rm -f ${duration_successful_manifest} ${slurm_successful_manifest_unique} ${simulation_successful_manifest}
+rm -f ${duration_successful_manifest}_* ${slurm_successful_manifest_unique}_* ${simulation_successful_manifest}_*
 
 # temporary files deleted at the end, also deleted here in case script dies
-pending_counter_file=${batch_summary_dirname}/pending
 completed_counter_file=${batch_summary_dirname}/completed
 slurm_error_manifest=${batch_summary_dirname}/error_manifest.slurm
 slurm_running_manifest=${batch_summary_dirname}/running_manifest.slurm
-rm -f ${pending_counter_file} ${completed_counter_file} ${slurm_error_manifest} ${slurm_running_manifest}
+slurm_pending_manifest=${batch_summary_dirname}/pending_manifest.slurm
+rm -f ${completed_counter_file} ${slurm_error_manifest} ${slurm_running_manifest} ${slurm_pending_manifest}
+rm -f ${completed_counter_file}_* ${slurm_error_manifest}_* ${slurm_running_manifest}_* ${slurm_pending_manifest}_*
 
 logfiles=($(cat ${log_manifest}))
 jobid_list=($(cat ${job_manifest}))
@@ -147,9 +147,9 @@ do
 
     sbatch_command_error=`grep 'sbatch: error' ${slurm_logfile}`
     if [[ -n ${sbatch_command_error} ]]; then
-        echo ${slurm_logfile} >> ${slurm_error_manifest}
+        echo ${slurm_logfile} >> ${slurm_error_manifest}_${zero_padded_idx}
         echo ${logfile} >> ${simulation_error_manifest}_${zero_padded_idx}
-        echo 1 >> ${completed_counter_file}
+        echo 1 >> ${completed_counter_file}_${zero_padded_idx}
         continue
     fi
 
@@ -169,35 +169,36 @@ do
 
     job_failed=`echo $job_state | grep FAILED`
     if [[ -n ${job_failed} ]]; then
-        echo ${slurm_logfile} >> ${slurm_error_manifest}
+        echo ${slurm_logfile} >> ${slurm_error_manifest}_${zero_padded_idx}
         echo ${logfile} >> ${simulation_error_manifest}_${zero_padded_idx}
-        echo 1 >> ${completed_counter_file}
+        echo 1 >> ${completed_counter_file}_${zero_padded_idx}
         continue
     fi
 
     job_cancelled=`echo $job_state | grep CANCELLED`
     if [[ -n ${job_cancelled} ]]; then
-        echo ${slurm_logfile} >> ${slurm_error_manifest}
+        echo ${slurm_logfile} >> ${slurm_error_manifest}_${zero_padded_idx}
         echo ${logfile} >> ${simulation_error_manifest}_${zero_padded_idx}
-        echo 1 >> ${completed_counter_file}
+        echo 1 >> ${completed_counter_file}_${zero_padded_idx}
         continue
     fi
 
 
     job_pending=`echo $job_state | grep PENDING`
     if [[ -n ${job_pending} ]]; then
-        echo 1 >> ${pending_counter_file}
+        echo ${slurm_logfile} >> ${slurm_pending_manifest}_${zero_padded_idx}
+        echo ${logfile} >> ${simulation_pending_manifest}_${zero_padded_idx}
         continue
     fi
 
     job_running=`echo $job_state | grep RUNNING`
     if [[ -n ${job_running} ]]; then
-        echo ${slurm_logfile} >> ${slurm_running_manifest}
-        echo ${logfile} >> ${simulation_running_manifest}
+        echo ${slurm_logfile} >> ${slurm_running_manifest}_${zero_padded_idx}
+        echo ${logfile} >> ${simulation_running_manifest}_${zero_padded_idx}
         continue
     fi
 
-    echo 1 >> ${completed_counter_file}
+    echo 1 >> ${completed_counter_file}_${zero_padded_idx}
 
     simulation_duration=$(sacct -j ${jobid} -o Elapsed -np | grep -oPm 1 '^[^|]+')
     return_code=$?
@@ -207,16 +208,16 @@ do
 
     if [[ -n ${num_proc_per_gpu} ]]; then
         if [[ $((i % num_proc_per_gpu)) -eq 0 ]]; then
-            echo "${simulation_duration}" >> ${duration_successful_manifest}
-            echo ${slurm_logfile} >> ${slurm_successful_manifest_unique}
+            echo "${simulation_duration}" >> ${duration_successful_manifest}_${zero_padded_idx}
+            echo ${slurm_logfile} >> ${slurm_successful_manifest_unique}_${zero_padded_idx}
         fi
     else
-        echo "${simulation_duration}" >> ${duration_successful_manifest}
-            echo ${slurm_logfile} >> ${slurm_successful_manifest_unique}
+        echo "${simulation_duration}" >> ${duration_successful_manifest}_${zero_padded_idx}
+        echo ${slurm_logfile} >> ${slurm_successful_manifest_unique}_${zero_padded_idx}
     fi
-    echo ${logfile} >> ${simulation_successful_manifest}
+    echo ${logfile} >> ${simulation_successful_manifest}_${zero_padded_idx}
 
-    if [[ -n ${custom_processing_functions} ]]; then
+    if [[  $(type -t process_logfile) == function ]]; then
         process_logfile ${i} ${command_file} ${logfile} ${batch_summary_dirname}
     fi
 
@@ -244,6 +245,51 @@ if [[ -n "$(ls ${simulation_error_manifest}_*)" ]]; then
     rm -f ${simulation_error_manifest}_*
 fi
 
+if [[ -n "$(ls ${simulation_running_manifest}_*)" ]]; then
+    cat ${simulation_running_manifest}_* > ${simulation_running_manifest}
+    rm -f ${simulation_running_manifest}_*
+fi
+
+if [[ -n "$(ls ${simulation_pending_manifest}_*)" ]]; then
+    cat ${simulation_pending_manifest}_* > ${simulation_pending_manifest}
+    rm -f ${simulation_pending_manifest}_*
+fi
+
+if [[ -n "$(ls ${duration_successful_manifest}_*)" ]]; then
+    cat ${duration_successful_manifest}_* > ${duration_successful_manifest}
+    rm -f ${duration_successful_manifest}_*
+fi
+
+if [[ -n "$(ls ${slurm_successful_manifest_unique}_*)" ]]; then
+    cat ${slurm_successful_manifest_unique}_* > ${slurm_successful_manifest_unique}
+    rm -f ${slurm_successful_manifest_unique}_*
+fi
+
+if [[ -n "$(ls ${simulation_successful_manifest}_*)" ]]; then
+    cat ${simulation_successful_manifest}_* > ${simulation_successful_manifest}
+    rm -f ${simulation_successful_manifest}_*
+fi
+
+if [[ -n "$(ls ${completed_counter_file}_*)" ]]; then
+    cat ${completed_counter_file}_* > ${completed_counter_file}
+    rm -f ${completed_counter_file}_*
+fi
+
+if [[ -n "$(ls ${slurm_error_manifest}_*)" ]]; then
+    cat ${slurm_error_manifest}_* > ${slurm_error_manifest}
+    rm -f ${slurm_error_manifest}_*
+fi
+
+if [[ -n "$(ls ${slurm_running_manifest}_*)" ]]; then
+    cat ${slurm_running_manifest}_* > ${slurm_running_manifest}
+    rm -f ${slurm_running_manifest}_*
+fi
+
+if [[ -n "$(ls ${slurm_pending_manifest}_*)" ]]; then
+    cat ${slurm_pending_manifest}_* > ${slurm_pending_manifest}
+    rm -f ${slurm_pending_manifest}_*
+fi
+
 if [[ ${error} -ne 0 ]]; then
     die "sacct failed. See above error(s)."
 fi
@@ -254,8 +300,8 @@ if [[ -f ${simulation_running_manifest} ]]; then
 fi
 
 pending=0
-if [[ -f ${pending_counter_file} ]]; then
-    pending=$(wc -l < ${pending_counter_file})
+if [[ -f ${simulation_pending_manifest} ]]; then
+    pending=$(wc -l < ${simulation_pending_manifest})
 fi
 
 successful=0
@@ -281,16 +327,20 @@ if [[ -f ${slurm_running_manifest} ]]; then
     sort -u ${slurm_running_manifest} > ${slurm_running_manifest_unique}
 fi
 
+if [[ -f ${slurm_pending_manifest} ]]; then
+    sort -u ${slurm_pending_manifest} > ${slurm_pending_manifest_unique}
+fi
+
 if [[ -f ${slurm_error_manifest} ]]; then
     sort -u ${slurm_error_manifest} > ${slurm_error_manifest_unique}
 fi
 
-rm -f ${pending_counter_file} ${completed_counter_file}
+rm -f ${slurm_pending_manifest} ${completed_counter_file}
 rm -f ${slurm_running_manifest} ${slurm_error_manifest}
 
 if [[ ${errors} -gt 0 ]]; then
     if [[ ${num_completed_sims} -ne ${num_logs} ]]; then
-        echo "REGRESSION WILL FAIL: $errors simulations have errors." >&2
+        echo "BATCH WILL FAIL: $errors simulations have errors." >&2
         echo "Pending: ${pending}"
         echo "Running: ${running}"
         echo "Successful: ${successful}"
@@ -298,12 +348,18 @@ if [[ ${errors} -gt 0 ]]; then
         echo
         echo "Failed jobs slurm logs: ${slurm_error_manifest_unique}"
         echo "Failed simulation logs: ${simulation_error_manifest}"
-        if [[ -n ${custom_processing_functions} ]]; then
+        if [[ -f ${slurm_successful_manifest_unique} ]]; then
+            echo
+            echo "Successful manifests:"
+            echo "Slurm job logs: ${slurm_successful_manifest_unique}"
+            echo "Simulation logs: ${simulation_successful_manifest}"
+        fi
+        if [[  $(type -t generate_summary) == function ]]; then
             generate_summary $command_file $batch_summary_dirname
         fi
         exit 2
     else
-        echo "REGRESSION FAILED: $errors simulations have errors." >&2
+        echo "BATCH FAILED: $errors simulations have errors." >&2
         echo "Pending: ${pending}"
         echo "Running: ${running}"
         echo "Successful: ${successful}"
@@ -311,34 +367,52 @@ if [[ ${errors} -gt 0 ]]; then
         echo
         echo "Failed jobs slurm logs: ${slurm_error_manifest_unique}"
         echo "Failed simulation logs: ${simulation_error_manifest}"
-        if [[ -n ${custom_processing_functions} ]]; then
+        if [[ -f ${slurm_successful_manifest_unique} ]]; then
+            echo
+            echo "Successful manifests:"
+            echo "Slurm job logs: ${slurm_successful_manifest_unique}"
+            echo "Simulation logs: ${simulation_successful_manifest}"
+        fi
+        if [[  $(type -t generate_summary) == function ]]; then
             generate_summary $command_file $batch_summary_dirname
         fi
         exit 2
     fi
 else
     if [[ ${pending} -eq ${num_logs} ]]; then
-        echo "REGRESSION PENDING: All jobs still pending."
+        echo "BATCH PENDING: All jobs still pending."
         echo "Pending: ${pending}"
         echo "Running: ${running}"
         echo "Successful: ${successful}"
         echo "Failed: ${errors}"
         exit 3
     elif [[ ${num_completed_sims} -ne ${num_logs} ]]; then
-        echo "REGRESSION IN PROGRESS: ${num_completed_sims}/${num_logs} simulations complete. No errors so far."
+        echo "BATCH IN PROGRESS: ${num_completed_sims}/${num_logs} simulations complete. No errors so far."
         echo "Pending: ${pending}"
         echo "Running: ${running}"
         echo "Successful: ${successful}"
         echo "Failed: ${errors}"
+        if [[ -f ${slurm_pending_manifest_unique} ]]; then
+            echo
+            echo "Pending manifests:"
+            echo "Slurm job logs: ${slurm_pending_manifest_unique}"
+            echo "Simulation logs: ${simulation_pending_manifest}"
+        fi
         if [[ -f ${slurm_running_manifest_unique} ]]; then
             echo
             echo "Running manifests:"
             echo "Slurm job logs: ${slurm_running_manifest_unique}"
             echo "Simulation logs: ${simulation_running_manifest}"
         fi
+        if [[ -f ${slurm_successful_manifest_unique} ]]; then
+            echo
+            echo "Successful manifests:"
+            echo "Slurm job logs: ${slurm_successful_manifest_unique}"
+            echo "Simulation logs: ${simulation_successful_manifest}"
+        fi
         exit 4
     else
-        echo "REGRESSION SUCCEEDED: ${num_completed_sims}/${num_logs} simulations complete."
+        echo "BATCH SUCCEEDED: ${num_completed_sims}/${num_logs} simulations complete."
         echo "Pending: ${pending}"
         echo "Running: ${running}"
         echo "Successful: ${successful}"
@@ -346,7 +420,7 @@ else
         echo
         echo "Job durations: ${duration_successful_manifest}"
     fi
-    if [[ -n ${custom_processing_functions} ]]; then
+    if [[  $(type -t generate_summary) == function ]]; then
         generate_summary $command_file $batch_summary_dirname
     fi
 fi

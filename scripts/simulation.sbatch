@@ -50,19 +50,19 @@ if [[ -n ${seeds} ]]; then
     readarray -td: seed_list <<<"${seeds}"
 
     #temporary workaround on compute canada since readarray '-d' doesn't work
-    if [[ ! "${seeds}" =~ "," ]]; then
+    if [[ ! "${seeds}" =~ ":" ]]; then
         seed_list=${seeds}
     else
-        readarray -t:, seed_list <<<"${seeds}"
+        readarray -td: seed_list <<<"${seeds}"
     fi
 fi
 
 if [[ -n ${checkpoints} ]]; then
     #temporary workaround on compute canada since readarray '-d' doesn't work
-    if [[ ! ${checkpoints} =~ "," ]]; then
+    if [[ ! ${checkpoints} =~ ":" ]]; then
         checkpoint_list=(${checkpoints})
     else
-        readarray -td, checkpoint_list <<<"${checkpoints}"
+        readarray -td: checkpoint_list <<<"${checkpoints}"
     fi
 fi
 

@@ -346,7 +346,7 @@ if [[ ${singleton} == 'yes' ]]; then
   job_script_options+=" --singleton"
 fi
 if [[ -n ${exclude_node_list} ]]; then
-  job_script_options+=" --exclude=${exclude_node_list}"
+  job_script_options+=" --exclude ${exclude_node_list}"
 fi
 if [[ ${hold} == "yes" ]]; then
   job_script_options+=" --hold"

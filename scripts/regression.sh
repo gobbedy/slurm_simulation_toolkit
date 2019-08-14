@@ -26,6 +26,18 @@ OPTIONS
                           ACCOUNT is the slurm account to use for every job (def-yymao or rrg-yymao).
                           Default is rrg-mao on Cedar, def-yymao otherwise. If also provided at the regression
                           control file level, the regression control file argument takes precendence.
+  --digest_only
+                          Generate a digest of the batches that would be run. Exit before launching any jobs.
+
+  --exclude EXCLUDE_NODE_LIST
+                          EXCLUDE_NODE_LIST is a comma-separated list of nodes to exclude. If also provided at the
+                          regression control file level, the regression control file argument takes precendence. If also
+                          provided at the regression control file level, the regression control file argument takes
+                          precendence.
+
+  --mail EMAIL
+                          Send user e-mail when regression ends. Sends e-mail to EMAIL. Schedules dummy job at end of
+                          regression in order to do this. FEATURE IS NOT READY YET. DO NOT USE.
 
   --max_jobs_in_parallel MAX
                           Enforce a maximum of MAX jobs in parallel for the current regression. This is mainly useful
@@ -54,9 +66,6 @@ OPTIONS
                           takes precendence.
 
                           Default is 1.
-
-  --mail EMAIL
-                          Send user e-mail when jobs ends. Sends e-mail to EMAIL
   --preserve_order
                           Simulations will be run in the same order as they appear in REGRESN_CTRL.
 
@@ -94,6 +103,8 @@ regresn_ctrl_file=''
 preserve_order=''
 num_proc_per_gpu='' # will default to 1 in simulation_batch.sh if neither provided here nor in regresn ctrl file
 account='' # will similarly be set to correct default in simulation_batch.sh if not provided
+exclude_node_list=''
+digest_only=''
 while [[ $# -ne 0 ]]; do
   case "$1" in
     -h|--help)
@@ -108,6 +119,14 @@ while [[ $# -ne 0 ]]; do
     ;;
     --account)
       account=$2
+      shift 2
+    ;;
+    --digest_only)
+      digest_only='yes'
+      shift 1
+    ;;
+    --exclude)
+      exclude_node_list=$2
       shift 2
     ;;
     --mail)
@@ -167,11 +186,13 @@ regression_summary_dir=${output_dir}/regression_summary
 # Create names of files that will contain summary information about regression
 summary_logfile=${regression_summary_dir}/summary.log
 batch_outputs_logfile=${regression_summary_dir}/batch_outputs.log
+dummy_output_logfile=${regression_summary_dir}/dummy_output.log
 regression_cancellation_executable=${regression_summary_dir}/cancel_regression.sh
 regression_command_file=${regression_summary_dir}/regression_command.txt
 simulations_manifests=${regression_summary_dir}/simulations_manifests.txt
 hash_manifest=${regression_summary_dir}/hash_manifest.txt
 batch_command_manifest=${regression_summary_dir}/batch_command_manifest.txt
+ctrl_digest=${regression_summary_dir}/ctrl_digest.ctrl
 
 # create regression dir if doesn't exist
 mkdir -p ${regression_summary_dir}
@@ -185,9 +206,6 @@ regresn_ctrl_file="${regression_summary_dir}/${ctrl_file_basename}"
 ################## DETERMINE ARGUMENTS TO BE PASSED DOWN TO SIMULATION SCRIPT (simulation_batch.sh) ####################
 ########################################################################################################################
 batch_script_options=" --regress_dir ${output_dir}"
-if [[ ${email} == yes ]]; then
-  batch_script_options+=" --mail ${EMAIL}"
-fi
 
 ########################################################################################################################
 ######################################## PROCESS THE CONTROL FILE ######################################################
@@ -290,7 +308,7 @@ do
                loop_iterator_name=${loop_iterator_name_list[${mdx}]} # eg "alpha"
                iterator_value_list_cmd=$(echo \$\{${loop_iterator_name}[@]\}) # eg "${alpha[@]}"
                iterator_value_list=($(eval echo ${iterator_value_list_cmd}))  # eg (1.0 1.5 2.0 2.5)
-               #echo $loop_iterator_name
+
                for (( pdx=0; pdx<${unrolled_loop_size}; pdx++ ));
                do
                {
@@ -313,6 +331,46 @@ do
    total_line_list+=("${line_list[@]}")
 }
 done
+
+
+if [[  $(type -t process_ctrl_line) == function ]]; then
+    for (( idx=0; idx<${#total_line_list[@]}; idx++ ));
+    do
+    {
+        zero_padded_idx=$(printf "%05d\n" ${idx})
+        line=${total_line_list[${idx}]}
+        process_ctrl_line "$line" > ${ctrl_digest}_${zero_padded_idx}
+    }&
+    pid=$!
+    pid_list[$pid]=1
+    done
+
+    process_error=0
+    for pid in "${!pid_list[@]}"
+    do
+    {
+        wait $pid
+        if [[ $? -ne 0 ]]; then
+            process_error=$((process_error+1))
+        fi
+    }
+    done
+
+    if [[ ${process_error} -gt 0 ]]; then
+        die "process_ctrl_line failed. See above error(s)."
+    fi
+
+    cat ${ctrl_digest}_* > ${ctrl_digest}
+    rm -f ${ctrl_digest}_*
+
+fi
+
+if [[ -n ${digest_only} ]]; then
+    if [[  $(type -t process_ctrl_line) == function ]]; then
+        echo "CTRL DIGEST: $(readlink -f ${ctrl_digest})" |tee -a ${summary_logfile}
+    fi
+    exit
+fi
 
 # split lines into manageable number of simulations
 max_sim_per_bucket=1500
@@ -360,7 +418,8 @@ do
     for (( idx=0; idx<${line_bucket_size}; idx++ )); # 0,1,2
     do
     {
-       line=${total_line_list[$((${line_bucket_start}+${idx}))]}
+       line_idx=$((${line_bucket_start}+${idx}))
+       line=${total_line_list[${line_idx}]}
        line_split=($(echo $line))
 
        base_script=$(readlink -f ${source_root_dir}/${line_split[0]})
@@ -373,17 +432,36 @@ do
            fi
        fi
 
+       if [[ ! "${batch_sim_args}" =~ "--exclude" ]]; then
+           if [[ -n ${exclude_node_list} ]]; then
+               batch_unique_options+=" --exclude ${exclude_node_list}"
+           fi
+       fi
+
        if [[ ! "${batch_sim_args}" =~ "--num_proc_per_gpu" ]]; then
            if [[ -n ${num_proc_per_gpu} ]]; then
                batch_unique_options+=" --num_proc_per_gpu ${num_proc_per_gpu}"
            fi
        fi
 
-       zero_padded_idx=$(printf "%05d\n" ${idx}) # for alphabetical ordering
+       zero_padded_idx=$(printf "%05d\n" ${line_idx}) # for alphabetical ordering
        ${batch_simulation_executable} --hold --base_script ${base_script} ${batch_script_options} ${batch_unique_options} ${batch_sim_args} &> ${batch_outputs_logfile}_${zero_padded_idx}
-       if [[ $? -ne 0 ]]; then
-           die "${batch_simulation_executable} failed. See ${batch_outputs_logfile}_${zero_padded_idx}"
-       fi
+       return_code=$?
+
+       # batch status script failed
+       num_fail=0
+       while [[ ${return_code} -eq 1 ]]; do
+           # retry
+           echo "${batch_simulation_executable} failed. Retrying..."
+           ${batch_simulation_executable} --hold --base_script ${base_script} ${batch_script_options} ${batch_unique_options} ${batch_sim_args} &> ${batch_outputs_logfile}_${zero_padded_idx}
+           return_code=$?
+           if [[ ${return_code} -eq 1 ]]; then
+               num_fail=$((num_fail+1))
+               if [[ ${num_fail} -eq 3 ]]; then
+                   die "${batch_simulation_executable} failed. See ${batch_outputs_logfile}_${zero_padded_idx}"
+               fi
+           fi
+       done
     }&
     pid=$!
     pid_list[$pid]=1
@@ -485,6 +563,26 @@ if [[ ${process_error} -gt 0 ]]; then
     die "Job releasing failed. See above error(s)."
 fi
 
+if [[ ${email} == yes ]]; then
+    # start dummy batch for e-mailing user that regression is dome
+    # use the last batches options to make sure configuration is valid
+    #batch_sim_args=$(echo ${batch_sim_args} | sed -e "s/--num_simulations [0-9]\+//g" | sed -e "s/--time [^\s\\]\+//g")
+    #sane_batch_args="--hold --base_script ${base_script} ${batch_script_options} ${batch_unique_options} ${batch_sim_args}"
+    #sane_batch_args="--hold --base_script ${base_script}"
+    #dummy_args="--mail ${EMAIL} --num_simulations 1 --time 0-00:00:01 ${sane_batch_args}"
+    dummy_args="--mail ${EMAIL} --num_simulations 1 --time 0-00:00:01 --hold --base_script ${base_script}"
+    ${batch_simulation_executable} --job_name REGRESSION_ENDED ${dummy_args} &> ${dummy_output_logfile}
+    if [[ $? -ne 0 ]]; then
+       die "${batch_simulation_executable} failed. See ${dummy_output_logfile}"
+    fi
+
+    # dummy job should start when all other jobs are done
+    dummy_job_id=$(cat $(grep "JOB IDs FILE IN:" ${batch_outputs_logfile} | grep -oP "\S+$"))
+    job_id_list_str=${job_id_list[@]}
+    depend_list=${job_id_list_str// /:}
+    scontrol update jobid=${dummy_job_id} Dependency=${depend_list}
+    scontrol release ${dummy_job_id}
+fi
 
 end=`date +%s`
 runtime=$((end-start))
@@ -515,7 +613,10 @@ echo "BATCH COMMAND MANIFEST: $(readlink -f ${batch_command_manifest})" |tee -a 
 echo "REGRESSION CANCELLATION SCRIPT: $(readlink -f ${regression_cancellation_executable})" |tee -a ${summary_logfile}
 echo "REGRESSION COMMAND FILE: $(readlink -f ${regression_command_file})" |tee -a ${summary_logfile}
 echo "REGRESSION CONTROL FILE (COPY): $(readlink -f ${regresn_ctrl_file})" |tee -a ${summary_logfile}
-echo "SIMULATION MANIFESTS: $(readlink -f ${simulations_manifests})" |tee -a ${summary_logfile}
 echo "HASH REFERENCES TO BATCH RUNS: $(readlink -f ${hash_manifest})" |tee -a ${summary_logfile}
+echo "SIMULATION MANIFESTS: $(readlink -f ${simulations_manifests})" |tee -a ${summary_logfile}
+if [[  $(type -t process_ctrl_line) == function ]]; then
+    echo "CTRL DIGEST: $(readlink -f ${ctrl_digest})" |tee -a ${summary_logfile}
+fi
 echo ""
 echo "ABOVE SUMMARY: ${summary_logfile}"

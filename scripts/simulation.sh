@@ -299,7 +299,7 @@ if [[ ${email} == yes ]]; then
 fi
 
 if [[ -n ${exclude_node_list} ]]; then
-  simulation_options+=" --exclude=${exclude_node_list}"
+  simulation_options+=" --exclude ${exclude_node_list}"
 fi
 
 if [[ ${hold} == "yes" ]]; then
